@@ -1,0 +1,7 @@
+Rayara QR stand copy:
+SCAN • EXPLORE • PLAY • WIN
+Scan to view our menu and play Rayara games.
+Win a reward for your next visit — up to 25% off.
+Terms apply. One reward-bearing play per guest session every 24 hours. Rewards are subject to minimum spend, maximum discount and validity conditions.
+
+Generate the QR code only after deploying the frontend. Its destination should be the exact HTTPS customer app URL, e.g. https://your-rayara-domain.com/ .

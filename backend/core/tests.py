@@ -1,0 +1,88 @@
+from datetime import timedelta
+from django.utils import timezone
+from django.test import TestCase
+from rest_framework.test import APIClient
+from rest_framework import status
+from .models import Customer, CustomerOTP, Game, Reward, GameAttempt, Coupon
+
+class CustomerEmailAuthAndGameplayTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.game = Game.objects.create(key='spin', name='Lucky Spin', active=True)
+        self.quiz = Game.objects.create(key='quiz', name='Food Quiz', active=True)
+        self.reward = Reward.objects.create(percentage=15, weight=10, active=True, minimum_spend=199, max_discount=50)
+
+    def test_send_email_otp_success(self):
+        response = self.client.post('/api/customer/send-otp/', {'email': 'diner@example.com'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        self.assertIn('dev_otp', response.data)
+        self.assertEqual(response.data['email'], 'diner@example.com')
+        self.assertTrue(CustomerOTP.objects.filter(email='diner@example.com').exists())
+
+    def test_send_email_otp_invalid_email(self):
+        response = self.client.post('/api/customer/send-otp/', {'email': 'invalid-email-format'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_send_email_otp_cooldown(self):
+        res1 = self.client.post('/api/customer/send-otp/', {'email': 'guest1@example.com'}, format='json')
+        self.assertEqual(res1.status_code, status.HTTP_200_OK)
+        # Immediate second request triggers cooldown
+        res2 = self.client.post('/api/customer/send-otp/', {'email': 'guest1@example.com'}, format='json')
+        self.assertEqual(res2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_verify_email_otp_and_play_restriction(self):
+        # 1. Send OTP
+        res = self.client.post('/api/customer/send-otp/', {'email': 'guest2@example.com'}, format='json')
+        otp = res.data['dev_otp']
+
+        # 2. Verify bad OTP
+        bad_res = self.client.post('/api/customer/verify-otp/', {'email': 'guest2@example.com', 'otp': '000000'}, format='json')
+        self.assertEqual(bad_res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 3. Verify correct OTP
+        verify_res = self.client.post('/api/customer/verify-otp/', {'email': 'guest2@example.com', 'otp': otp}, format='json')
+        self.assertEqual(verify_res.status_code, status.HTTP_200_OK)
+        token = verify_res.data['token']
+        self.assertTrue(verify_res.data['customer']['can_play'])
+
+        # 4. Check profile
+        me_res = self.client.get('/api/customer/me/', HTTP_X_CUSTOMER_TOKEN=token)
+        self.assertEqual(me_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(me_res.data['customer']['email'], 'guest2@example.com')
+        self.assertTrue(me_res.data['customer']['can_play'])
+
+        # 5. Play game first time -> succeeds and creates coupon
+        play_res = self.client.post('/api/game/play/', {'game': 'spin'}, format='json', HTTP_X_CUSTOMER_TOKEN=token)
+        self.assertEqual(play_res.status_code, status.HTTP_200_OK)
+        self.assertFalse(play_res.data['can_play'])
+        self.assertEqual(Coupon.objects.filter(email='guest2@example.com').count(), 1)
+        self.assertEqual(GameAttempt.objects.filter(email='guest2@example.com').count(), 1)
+
+        # 6. Second play within 24 hours -> rejected with 429
+        repeat_res = self.client.post('/api/game/play/', {'game': 'spin'}, format='json', HTTP_X_CUSTOMER_TOKEN=token)
+        self.assertEqual(repeat_res.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn('already played', repeat_res.data['error'])
+
+        # 7. Login again from new session / device with same email -> still blocked from playing
+        CustomerOTP.objects.all().delete()
+        new_otp_res = self.client.post('/api/customer/send-otp/', {'email': 'guest2@example.com'}, format='json')
+        new_verify = self.client.post('/api/customer/verify-otp/', {'email': 'guest2@example.com', 'otp': new_otp_res.data['dev_otp']}, format='json')
+        new_token = new_verify.data['token']
+        self.assertFalse(new_verify.data['customer']['can_play'])
+
+        repeat2 = self.client.post('/api/game/play/', {'game': 'quiz', 'answer': 'Shawarma'}, format='json', HTTP_X_CUSTOMER_TOKEN=new_token)
+        self.assertEqual(repeat2.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+        # 8. Saved coupons are retrievable by email
+        coupons_res = self.client.get('/api/coupons/', HTTP_X_CUSTOMER_TOKEN=new_token)
+        self.assertEqual(coupons_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(coupons_res.data), 1)
+
+        # 9. Another email address CAN play
+        other_res = self.client.post('/api/customer/send-otp/', {'email': 'another@example.com'}, format='json')
+        other_verify = self.client.post('/api/customer/verify-otp/', {'email': 'another@example.com', 'otp': other_res.data['dev_otp']}, format='json')
+        other_token = other_verify.data['token']
+        self.assertTrue(other_verify.data['customer']['can_play'])
+        other_play = self.client.post('/api/game/play/', {'game': 'spin'}, format='json', HTTP_X_CUSTOMER_TOKEN=other_token)
+        self.assertEqual(other_play.status_code, status.HTTP_200_OK)

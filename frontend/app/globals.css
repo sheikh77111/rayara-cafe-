@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f5efe6;
+  color: #22140c;
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.serif {
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+/* Authentic Travertine Stucco Subtle Texture */
+.travertine-bg {
+  background-color: #f5efe6;
+  background-image: 
+    radial-gradient(#dfd2c0 0.75px, transparent 0.75px),
+    radial-gradient(#e5d9c8 0.75px, #f5efe6 0.75px);
+  background-size: 14px 14px;
+  background-position: 0 0, 7px 7px;
+}
+
+/* Backlit Illumination Effect matching the Signage */
+.backlit-glow {
+  text-shadow: 
+    0 0 10px rgba(229, 154, 56, 0.7),
+    0 0 22px rgba(217, 125, 38, 0.5),
+    0 0 38px rgba(245, 166, 35, 0.3);
+}
+
+.backlit-border {
+  border: 1px solid rgba(229, 154, 56, 0.4);
+  box-shadow: 
+    0 0 20px rgba(229, 154, 56, 0.25),
+    inset 0 0 15px rgba(229, 154, 56, 0.1);
+}
+
+.goldline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e59a38, transparent);
+}
+
+.bronze-gradient {
+  background: linear-gradient(145deg, #3a2214 0%, #24140c 60%, #170d07 100%);
+}
+
+button {
+  transition: transform .15s, opacity .15s, box-shadow .15s;
+}
+
+button:active {
+  transform: scale(.98);
+}
+
+@keyframes needle-tick {
+  0% { transform: rotate(-5deg); }
+  100% { transform: rotate(5deg); }
+}
+
+.needle-ticking {
+  transform-origin: top center;
+  animation: needle-tick 0.1s infinite alternate ease-in-out;
+}

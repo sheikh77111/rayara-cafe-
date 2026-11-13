@@ -34,7 +34,7 @@ class CustomerEmailAuthAndGameplayTests(TestCase):
     def test_verify_email_otp_and_play_restriction(self):
         # 1. Send OTP
         res = self.client.post('/api/customer/send-otp/', {'email': 'guest2@example.com'}, format='json')
-        otp = res.data['dev_otp']
+        otp = res.data.get('dev_otp') or CustomerOTP.objects.filter(email='guest2@example.com').latest('created_at').otp_code
 
         # 2. Verify bad OTP
         bad_res = self.client.post('/api/customer/verify-otp/', {'email': 'guest2@example.com', 'otp': '000000'}, format='json')
@@ -66,8 +66,10 @@ class CustomerEmailAuthAndGameplayTests(TestCase):
 
         # 7. Login again from new session / device with same email -> still blocked from playing
         CustomerOTP.objects.all().delete()
-        new_otp_res = self.client.post('/api/customer/send-otp/', {'email': 'guest2@example.com'}, format='json')
-        new_verify = self.client.post('/api/customer/verify-otp/', {'email': 'guest2@example.com', 'otp': new_otp_res.data['dev_otp']}, format='json')
+        self.client.post('/api/customer/send-otp/', {'email': 'guest2@example.com'}, format='json')
+        new_otp = CustomerOTP.objects.filter(email='guest2@example.com').latest('created_at').otp_code
+        new_verify = self.client.post('/api/customer/verify-otp/', {'email': 'guest2@example.com', 'otp': new_otp}, format='json')
+        self.assertEqual(new_verify.status_code, status.HTTP_200_OK)
         new_token = new_verify.data['token']
         self.assertFalse(new_verify.data['customer']['can_play'])
 
@@ -80,8 +82,10 @@ class CustomerEmailAuthAndGameplayTests(TestCase):
         self.assertEqual(len(coupons_res.data), 1)
 
         # 9. Another email address CAN play
-        other_res = self.client.post('/api/customer/send-otp/', {'email': 'another@example.com'}, format='json')
-        other_verify = self.client.post('/api/customer/verify-otp/', {'email': 'another@example.com', 'otp': other_res.data['dev_otp']}, format='json')
+        self.client.post('/api/customer/send-otp/', {'email': 'another@example.com'}, format='json')
+        other_otp = CustomerOTP.objects.filter(email='another@example.com').latest('created_at').otp_code
+        other_verify = self.client.post('/api/customer/verify-otp/', {'email': 'another@example.com', 'otp': other_otp}, format='json')
+        self.assertEqual(other_verify.status_code, status.HTTP_200_OK)
         other_token = other_verify.data['token']
         self.assertTrue(other_verify.data['customer']['can_play'])
         other_play = self.client.post('/api/game/play/', {'game': 'spin'}, format='json', HTTP_X_CUSTOMER_TOKEN=other_token)

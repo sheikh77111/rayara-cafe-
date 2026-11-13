@@ -11,7 +11,7 @@ for _env_candidate in [BASE_DIR.parent / '.env', BASE_DIR / '.env']:
                 _line = _line.strip()
                 if _line and not _line.startswith('#') and '=' in _line:
                     _k, _v = _line.split('=', 1)
-                    os.environ.setdefault(_k.strip(), _v.strip())
+                    os.environ[_k.strip()] = _v.strip()
         break
 SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-local-development-key')
 DEBUG = os.getenv('DEBUG', '1') == '1'

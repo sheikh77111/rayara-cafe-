@@ -1243,7 +1243,7 @@ export default function Home() {
                     />
                   </div>
                   <p className="text-[11px] text-stone-500 mt-1">
-                    We'll email you a 6-digit code via Resend.
+                    We'll email you a 6-digit verification code.
                   </p>
                 </div>
 
@@ -1275,7 +1275,7 @@ export default function Home() {
                   />
 
                   <p className="text-center text-[12px] text-stone-600 mt-2.5">
-                    We've emailed your 6-digit code via Resend. Check your inbox &amp; spam folder.
+                    We've emailed your 6-digit verification code. Check your inbox &amp; spam folder.
                   </p>
                 </div>
 

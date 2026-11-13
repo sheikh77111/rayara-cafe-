@@ -137,7 +137,26 @@ def send_email_otp(recipient_email: str, otp_code: str) -> dict:
     </html>
     """
 
-    # 1. Try Resend if configured
+    # 1. Try Gmail SMTP first if configured (Supports ANY recipient address worldwide)
+    if getattr(settings, 'EMAIL_HOST_USER', None) and getattr(settings, 'EMAIL_HOST_PASSWORD', None):
+        try:
+            send_mail(
+                subject=subject,
+                message=text_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[recipient_email],
+                html_message=html_message,
+                fail_silently=False
+            )
+            print(f"\n========================================")
+            print(f"[RAYARA GMAIL SMTP] Real email dispatched to: {recipient_email}")
+            print(f"========================================\n")
+            logger.info(f"[SMTP SUCCESS] Sent email to {recipient_email}")
+            return {'success': True, 'mode': 'smtp'}
+        except Exception as e:
+            logger.error(f"[SMTP ERROR] {e}")
+
+    # 2. Try Resend if configured
     if getattr(settings, 'RESEND_API_KEY', None):
         resend_result = send_resend_email(recipient_email, subject, html_message, text_message)
         if resend_result.get('success'):
@@ -148,21 +167,6 @@ def send_email_otp(recipient_email: str, otp_code: str) -> dict:
         else:
             # Resend failed (e.g. unverified domain or test account restriction)
             logger.warning(f"[RESEND FALLBACK] {resend_result.get('error')}")
-
-    # 2. Try Django SMTP if configured
-    if getattr(settings, 'EMAIL_HOST_USER', None):
-        try:
-            send_mail(
-                subject=subject,
-                message=text_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[recipient_email],
-                html_message=html_message,
-                fail_silently=False
-            )
-            return {'success': True, 'mode': 'smtp'}
-        except Exception as e:
-            logger.error(f"[SMTP ERROR] {e}")
 
     # 3. Console fallback for local dev
     print(f"\n========================================")

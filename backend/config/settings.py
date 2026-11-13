@@ -72,6 +72,9 @@ except ImportError:
             'default': {
                 'ENGINE': 'django.db.backends.sqlite3',
                 'NAME': str(BASE_DIR / 'db.sqlite3'),
+                'OPTIONS': {
+                    'timeout': 30,  # 30-second busy timeout for concurrent multi-staff tablet writes
+                }
             }
         }
 

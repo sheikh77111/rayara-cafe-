@@ -800,3 +800,142 @@ class Phase4And5POSWorkflowTests(TestCase):
         self.assertGreaterEqual(processed, 1)
         job.refresh_from_db()
         self.assertEqual(job.status, 'printed')
+
+
+class Phase12MultiStaffConcurrencyTests(TestCase):
+    """
+    Validates concurrency safety when multiple staff members / devices
+    take orders and settle bills simultaneously.
+    """
+    def setUp(self):
+        self.staff1 = User.objects.create_user(username='staff_tablet_1', password='pw1', is_staff=True)
+        self.staff2 = User.objects.create_user(username='staff_tablet_2', password='pw2', is_staff=True)
+        self.category = Category.objects.create(name='Snacks', display_order=1)
+        self.burger = Product.objects.create(category=self.category, name='Classic Burger', price=Decimal('180.00'))
+        self.fries = Product.objects.create(category=self.category, name='Peri Peri Fries', price=Decimal('90.00'))
+        self.table_t1 = DiningTable.objects.create(number='T1', capacity=4, status='available')
+        self.table_t2 = DiningTable.objects.create(number='T2', capacity=4, status='available')
+
+        # Two separate HTTP clients representing two distinct physical tablets / devices
+        self.client1 = Client()
+        self.client1.login(username='staff_tablet_1', password='pw1')
+
+        self.client2 = Client()
+        self.client2.login(username='staff_tablet_2', password='pw2')
+
+    def test_concurrent_multi_staff_orders_different_tables(self):
+        """
+        Two staff members submitting orders for different tables at the same time:
+        both succeed with distinct unique order numbers and separate kitchen print jobs.
+        """
+        # Staff 1 orders for Table T1
+        resp1 = self.client1.post(
+            reverse('pos:api_order_create'),
+            data={
+                'order_type': 'dine_in',
+                'table_number': 'T1',
+                'items': [{'product_id': self.burger.id, 'quantity': 2}]
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(resp1.status_code, 201)
+        order1_num = resp1.json()['order_number']
+
+        # Staff 2 orders for Table T2
+        resp2 = self.client2.post(
+            reverse('pos:api_order_create'),
+            data={
+                'order_type': 'dine_in',
+                'table_number': 'T2',
+                'items': [{'product_id': self.fries.id, 'quantity': 1}]
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(resp2.status_code, 201)
+        order2_num = resp2.json()['order_number']
+
+        # Both order numbers must be distinct
+        self.assertNotEqual(order1_num, order2_num)
+
+        # Both tables are occupied
+        self.table_t1.refresh_from_db()
+        self.table_t2.refresh_from_db()
+        self.assertEqual(self.table_t1.status, 'occupied')
+        self.assertEqual(self.table_t2.status, 'occupied')
+
+        # Separate print jobs exist for each staff member's order
+        job1 = PrintJob.objects.filter(order__order_number=order1_num).first()
+        job2 = PrintJob.objects.filter(order__order_number=order2_num).first()
+        self.assertIsNotNone(job1)
+        self.assertIsNotNone(job2)
+        self.assertNotEqual(job1.id, job2.id)
+
+    def test_concurrent_multi_staff_orders_same_table_conflict(self):
+        """
+        If two staff members attempt to open the same table:
+        First succeeds, second is rejected with 409 Conflict.
+        """
+        # Staff 1 takes Table T1
+        resp1 = self.client1.post(
+            reverse('pos:api_order_create'),
+            data={
+                'order_type': 'dine_in',
+                'table_number': 'T1',
+                'items': [{'product_id': self.burger.id, 'quantity': 1}]
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(resp1.status_code, 201)
+
+        # Staff 2 also tries to open Table T1
+        resp2 = self.client2.post(
+            reverse('pos:api_order_create'),
+            data={
+                'order_type': 'dine_in',
+                'table_number': 'T1',
+                'items': [{'product_id': self.fries.id, 'quantity': 1}]
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(resp2.status_code, 409)
+        self.assertTrue(resp2.json().get('table_occupied'))
+        self.assertIn('already has an active order', resp2.json().get('error'))
+
+    def test_concurrent_billing_cash_settlement_duplicate_protection(self):
+        """
+        If two staff / cashiers try to settle the same order concurrently:
+        One settles successfully, the second is rejected so cash is never double-counted.
+        """
+        # Create an active order
+        resp_order = self.client1.post(
+            reverse('pos:api_order_create'),
+            data={
+                'order_type': 'dine_in',
+                'table_number': 'T1',
+                'items': [{'product_id': self.burger.id, 'quantity': 1}]
+            },
+            content_type='application/json'
+        )
+        order_id = resp_order.json()['order_id']
+
+        # Cashier 1 settles order
+        resp_settle_1 = self.client1.post(
+            reverse('pos:api_settle_payment'),
+            data={'order_id': order_id, 'payment_method': 'cash'},
+            content_type='application/json'
+        )
+        self.assertEqual(resp_settle_1.status_code, 200)
+        self.assertIn('settled successfully', resp_settle_1.json()['message'])
+
+        # Cashier 2 tries to settle the exact same order
+        resp_settle_2 = self.client2.post(
+            reverse('pos:api_settle_payment'),
+            data={'order_id': order_id, 'payment_method': 'cash'},
+            content_type='application/json'
+        )
+        self.assertEqual(resp_settle_2.status_code, 400)
+        self.assertIn('already paid and settled', resp_settle_2.json()['error'])
+
+        # Exactly 1 payment and 1 receipt recorded
+        self.assertEqual(Payment.objects.filter(order_id=order_id).count(), 1)
+        self.assertEqual(Receipt.objects.filter(order_id=order_id).count(), 1)

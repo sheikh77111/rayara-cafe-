@@ -226,13 +226,17 @@ class Order(models.Model):
         """
         Generates clean human-readable sequential order numbers.
         e.g. D-0101 for Dine-in or T-0101 for Takeaway.
+        Includes collision-prevention loop for multi-staff concurrent order submission.
         """
         prefix = "D" if order_type == 'dine_in' else "T"
         today = timezone.now().strftime('%y%m%d')
-        # Find count of orders created today
         today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         count = cls.objects.filter(created_at__gte=today_start).count() + 1
-        return f"{prefix}-{today}-{count:03d}"
+        candidate = f"{prefix}-{today}-{count:03d}"
+        while cls.objects.filter(order_number=candidate).exists():
+            count += 1
+            candidate = f"{prefix}-{today}-{count:03d}"
+        return candidate
 
     def recalculate_totals(self, apply_discount_amount=Decimal('0.00')):
         """
@@ -455,10 +459,17 @@ class Receipt(models.Model):
 
     @classmethod
     def generate_next_receipt_number(cls):
+        """
+        Generates sequential receipt numbers with concurrency collision protection.
+        """
         today = timezone.now().strftime('%y%m%d')
         today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
         count = cls.objects.filter(issued_at__gte=today_start).count() + 1
-        return f"RCP-{today}-{count:04d}"
+        candidate = f"RCP-{today}-{count:04d}"
+        while cls.objects.filter(receipt_number=candidate).exists():
+            count += 1
+            candidate = f"RCP-{today}-{count:04d}"
+        return candidate
 
 
 class AuditLog(models.Model):

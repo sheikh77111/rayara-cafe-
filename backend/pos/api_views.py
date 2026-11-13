@@ -125,18 +125,26 @@ def api_order_create(request):
                     'existing_order_id': active_order.id if active_order else None
                 }, status=status.HTTP_409_CONFLICT)
 
-        order_num = Order.generate_next_order_number(order_type=order_type)
-        order = Order.objects.create(
-            order_number=order_num,
-            order_type=order_type,
-            table=table,
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            takeaway_notes=takeaway_notes,
-            status='new',
-            created_by=request.user,
-            current_batch=1
-        )
+        order = None
+        for attempt in range(5):
+            order_num = Order.generate_next_order_number(order_type=order_type)
+            try:
+                with transaction.atomic():
+                    order = Order.objects.create(
+                        order_number=order_num,
+                        order_type=order_type,
+                        table=table,
+                        customer_name=customer_name,
+                        customer_phone=customer_phone,
+                        takeaway_notes=takeaway_notes,
+                        status='new',
+                        created_by=request.user,
+                        current_batch=1
+                    )
+                break
+            except Exception:
+                if attempt == 4:
+                    raise
 
         created_items = []
         for it in items_data:
@@ -596,18 +604,26 @@ def api_settle_payment(request):
             received_by=request.user
         )
 
-        # Generate Receipt
-        receipt_num = Receipt.generate_next_receipt_number()
-        receipt = Receipt.objects.create(
-            receipt_number=receipt_num,
-            order=order,
-            subtotal=order.subtotal,
-            discount_amount=order.discount_amount,
-            tax_amount=order.tax_amount,
-            grand_total=order.grand_total,
-            payment_method=payment_method,
-            issued_by=request.user
-        )
+        # Generate Receipt with retry on collision
+        receipt = None
+        for attempt in range(5):
+            receipt_num = Receipt.generate_next_receipt_number()
+            try:
+                with transaction.atomic():
+                    receipt = Receipt.objects.create(
+                        receipt_number=receipt_num,
+                        order=order,
+                        subtotal=order.subtotal,
+                        discount_amount=order.discount_amount,
+                        tax_amount=order.tax_amount,
+                        grand_total=order.grand_total,
+                        payment_method=payment_method,
+                        issued_by=request.user
+                    )
+                break
+            except Exception:
+                if attempt == 4:
+                    raise
 
         # Mark Order paid & completed
         order.is_paid = True

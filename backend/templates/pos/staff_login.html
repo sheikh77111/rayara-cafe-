@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Staff & Cashier Sign In | Rayara Cafe POS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --rayara-bronze: #2A1810;
+      --rayara-bronze-dark: #1C100A;
+      --rayara-amber: #E59A38;
+      --rayara-amber-glow: #F5A623;
+      --rayara-sand: #F5EFE6;
+      --rayara-olive: #4E5D42;
+    }
+    body {
+      background-color: var(--rayara-sand);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 16px;
+      background-image: 
+        radial-gradient(#dfd2c0 0.75px, transparent 0.75px),
+        radial-gradient(#e5d9c8 0.75px, var(--rayara-sand) 0.75px);
+      background-size: 14px 14px;
+      background-position: 0 0, 7px 7px;
+    }
+    .serif-brand {
+      font-family: 'Cinzel', Georgia, serif;
+    }
+    .login-card {
+      background: #ffffff;
+      border: 2px solid #e2d5c3;
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(42, 24, 16, 0.08), 0 0 25px rgba(229, 154, 56, 0.12);
+      width: 100%;
+      max-width: 440px;
+      padding: 36px 30px;
+    }
+    .staff-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background-color: var(--rayara-olive);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-bottom: 14px;
+    }
+    .brand-emblem {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: var(--rayara-bronze);
+      border: 2px solid var(--rayara-amber);
+      box-shadow: 0 0 20px rgba(229, 154, 56, 0.45);
+      margin: 0 auto 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--rayara-amber-glow);
+    }
+    .btn-rayara-staff {
+      background-color: var(--rayara-bronze);
+      color: #ffffff;
+      font-weight: 700;
+      border: 1.5px solid var(--rayara-amber);
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 16px;
+      box-shadow: 0 4px 16px rgba(42, 24, 16, 0.2);
+      transition: all 0.2s ease;
+    }
+    .btn-rayara-staff:hover {
+      background-color: var(--rayara-bronze-dark);
+      color: var(--rayara-amber-glow);
+      box-shadow: 0 6px 20px rgba(229, 154, 56, 0.35);
+    }
+    .form-control {
+      border: 1.5px solid #dcd1c2;
+      border-radius: 14px;
+      padding: 13px 16px;
+      font-size: 15px;
+      background-color: #faf7f2;
+    }
+    .form-control:focus {
+      border-color: var(--rayara-amber);
+      background-color: #ffffff;
+      box-shadow: 0 0 0 4px rgba(229, 154, 56, 0.18);
+    }
+    .portal-switch {
+      font-size: 11px;
+      color: #8c786a;
+      text-align: center;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px dashed #e2d5c3;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="text-center">
+    <div class="brand-emblem">
+      <div style="font-size: 22px; font-weight: bold; line-height: 1;">رايارة</div>
+      <div style="font-size: 8px; letter-spacing: 2px; color: #fff;">RAYARA</div>
+    </div>
+    <span class="staff-badge">
+      <i class="bi bi-tablet-fill"></i> Staff & Cashier Portal
+    </span>
+    <h1 class="serif-brand h4 mb-1" style="color: var(--rayara-bronze); font-weight: 700;">
+      RAYARA CAFE POS
+    </h1>
+    <p class="text-muted small mb-3">Tablet Order Punching & Counter Billing</p>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} py-2 px-3 small rounded-3 mb-3">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="POST" action="{% url 'pos:staff_login' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+
+    <div class="mb-3">
+      <label class="form-label small fw-semibold text-secondary">Staff Username</label>
+      <div class="input-group">
+        <span class="input-group-text bg-light border-end-0" style="border-radius: 14px 0 0 14px; border-color: #dcd1c2;">
+          <i class="bi bi-person-fill text-muted"></i>
+        </span>
+        <input type="text" name="username" class="form-control border-start-0" placeholder="e.g. staff1" required autofocus style="border-radius: 0 14px 14px 0;">
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label small fw-semibold text-secondary">Password / PIN</label>
+      <div class="input-group">
+        <span class="input-group-text bg-light border-end-0" style="border-radius: 14px 0 0 14px; border-color: #dcd1c2;">
+          <i class="bi bi-key-fill text-muted"></i>
+        </span>
+        <input type="password" name="password" class="form-control border-start-0" placeholder="••••••••" required style="border-radius: 0 14px 14px 0;">
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-rayara-staff w-100">
+      <i class="bi bi-box-arrow-in-right me-1"></i> Sign In to Tablet / Billing
+    </button>
+  </form>
+
+  <div class="portal-switch">
+    <p class="mb-1">
+      <i class="bi bi-shield-lock me-1"></i> Are you the restaurant owner?
+    </p>
+    <a href="{% url 'pos:owner_login' %}" class="fw-bold text-decoration-none" style="color: var(--rayara-amber);">
+      Go to Secure Owner Admin Portal →
+    </a>
+    <div class="mt-2 text-muted" style="font-size: 10px;">
+      Customers please scan table QR code for digital menu & rewards.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

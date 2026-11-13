@@ -1,0 +1,47 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Billing Counter | Rayara Cafe POS{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h2 class="serif-brand fw-bold mb-1" style="color: var(--rayara-bronze);">BILLING COUNTER</h2>
+      <p class="text-muted small mb-0">Select ready order to calculate taxes, apply discounts and print receipt.</p>
+    </div>
+    <div>
+      <span class="badge bg-success py-2 px-3 rounded-pill">
+        <i class="bi bi-printer-fill me-1"></i> Counter Printer Connected
+      </span>
+    </div>
+  </div>
+
+  <div class="card card-rayara p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="fw-bold mb-0">Orders Awaiting Payment</h5>
+      <input type="text" class="form-control form-control-sm w-auto" placeholder="Search order / table...">
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Order #</th>
+            <th>Type / Table</th>
+            <th>Items</th>
+            <th>Time</th>
+            <th>Status</th>
+            <th>Total Amount</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="billing-orders-tbody">
+          <tr>
+            <td colspan="7" class="text-center py-4 text-muted">No pending unpaid orders found.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

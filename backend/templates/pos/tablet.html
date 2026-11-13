@@ -1,0 +1,54 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Staff Tablet POS | Rayara Cafe{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h2 class="serif-brand fw-bold mb-1" style="color: var(--rayara-bronze);">STAFF TABLET POS</h2>
+      <p class="text-muted small mb-0">Select order type: Dine-in Table or Takeaway counter ticket.</p>
+    </div>
+    <div>
+      <span class="badge bg-success py-2 px-3 rounded-pill">
+        <i class="bi bi-wifi me-1"></i> Kitchen Printer Online
+      </span>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Quick Actions -->
+    <div class="col-md-6 col-lg-4">
+      <div class="card card-rayara p-4 text-center h-100 hover-shadow cursor-pointer" onclick="location.href='#new-dine-in'">
+        <div class="p-3 bg-light rounded-circle mx-auto mb-3 text-warning" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
+          <i class="bi bi-cup-hot-fill fs-2"></i>
+        </div>
+        <h4 class="fw-bold text-dark">Dine-In Order</h4>
+        <p class="text-muted small">Select an available table, add items and send to kitchen.</p>
+        <button class="btn btn-rayara-primary mt-auto">Open Table Grid</button>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+      <div class="card card-rayara p-4 text-center h-100 hover-shadow cursor-pointer" onclick="location.href='#new-takeaway'">
+        <div class="p-3 bg-light rounded-circle mx-auto mb-3 text-warning" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
+          <i class="bi bi-bag-check-fill fs-2"></i>
+        </div>
+        <h4 class="fw-bold text-dark">Takeaway Order</h4>
+        <p class="text-muted small">Create quick parcel order with customer name and phone.</p>
+        <button class="btn btn-rayara-primary mt-auto">New Takeaway</button>
+      </div>
+    </div>
+
+    <div class="col-md-12 col-lg-4">
+      <div class="card card-rayara p-4 h-100">
+        <h5 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history me-2"></i>Active Orders</h5>
+        <div id="active-orders-list" class="text-muted small">
+          <p>No active pending orders. Tap <b>Dine-In</b> or <b>Takeaway</b> to create an order.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

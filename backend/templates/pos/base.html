@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>{% block title %}Rayara Cafe POS{% endblock %}</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --rayara-bronze: #2A1810;
+      --rayara-bronze-dark: #1C100A;
+      --rayara-amber: #E59A38;
+      --rayara-amber-glow: #F5A623;
+      --rayara-sand: #F5EFE6;
+      --rayara-sand-card: #FAF6F0;
+      --rayara-olive: #4E5D42;
+      --rayara-border: #DFD2C0;
+    }
+    body {
+      background-color: var(--rayara-sand);
+      color: #241914;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      background-image: 
+        radial-gradient(#dfd2c0 0.75px, transparent 0.75px),
+        radial-gradient(#e5d9c8 0.75px, var(--rayara-sand) 0.75px);
+      background-size: 14px 14px;
+      background-position: 0 0, 7px 7px;
+    }
+    .serif-brand {
+      font-family: 'Cinzel', Georgia, serif;
+    }
+    .navbar-rayara {
+      background-color: var(--rayara-bronze);
+      border-bottom: 2px solid var(--rayara-amber);
+      box-shadow: 0 4px 20px rgba(42, 24, 16, 0.25);
+      padding: 10px 16px;
+    }
+    .nav-brand-emblem {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--rayara-bronze-dark);
+      border: 1.5px solid var(--rayara-amber);
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--rayara-amber-glow);
+      margin-right: 10px;
+      box-shadow: 0 0 10px rgba(229, 154, 56, 0.4);
+    }
+    .badge-role-owner {
+      background: linear-gradient(135deg, #d97d26, #f5a623);
+      color: #1c100a;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+    }
+    .badge-role-staff {
+      background: var(--rayara-olive);
+      color: #ffffff;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+    }
+    .card-rayara {
+      background: #ffffff;
+      border: 1px solid var(--rayara-border);
+      border-radius: 20px;
+      box-shadow: 0 8px 30px rgba(42, 24, 16, 0.05);
+    }
+    .btn-rayara-primary {
+      background: var(--rayara-bronze);
+      color: #ffffff;
+      border: 1px solid var(--rayara-amber);
+      border-radius: 12px;
+      font-weight: 600;
+      padding: 10px 18px;
+      transition: all 0.2s ease;
+    }
+    .btn-rayara-primary:hover {
+      background: var(--rayara-bronze-dark);
+      color: var(--rayara-amber-glow);
+      box-shadow: 0 4px 15px rgba(229, 154, 56, 0.3);
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- Main Top Navigation -->
+<nav class="navbar navbar-expand-lg navbar-dark navbar-rayara sticky-top">
+  <div class="container-fluid">
+    <a class="navbar-brand d-flex align-items-center" href="/pos/status/">
+      <div class="nav-brand-emblem">
+        <span style="font-size: 14px; font-weight: bold; line-height: 1;">رايارة</span>
+      </div>
+      <div>
+        <span class="serif-brand fw-bold text-white tracking-wider" style="font-size: 18px;">RAYARA CAFE</span>
+        <span class="d-block text-warning text-uppercase" style="font-size: 9px; letter-spacing: 2px;">POS & Management</span>
+      </div>
+    </a>
+
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#posNavbar">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="posNavbar">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-3 gap-1">
+        <li class="nav-item">
+          <a class="nav-link text-white fw-semibold px-3 rounded-3 {% if request.path == '/pos/tablet/' %}bg-white bg-opacity-10 text-warning{% endif %}" href="{% url 'pos:tablet' %}">
+            <i class="bi bi-tablet me-1"></i> Tablet Ordering
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link text-white fw-semibold px-3 rounded-3 {% if request.path == '/pos/billing/' %}bg-white bg-opacity-10 text-warning{% endif %}" href="{% url 'pos:billing' %}">
+            <i class="bi bi-receipt me-1"></i> Billing Counter
+          </a>
+        </li>
+        {% if user.is_superuser %}
+        <li class="nav-item">
+          <a class="nav-link text-white fw-semibold px-3 rounded-3 {% if request.path == '/pos/admin/' %}bg-white bg-opacity-10 text-warning{% endif %}" href="{% url 'pos:owner_dashboard' %}">
+            <i class="bi bi-speedometer2 me-1"></i> Owner Dashboard
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link text-white-50 px-3" href="/admin/" target="_blank">
+            <i class="bi bi-gear me-1"></i> Django Admin
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+
+      <div class="d-flex align-items-center gap-3">
+        {% if user.is_authenticated %}
+          <div class="text-end d-none d-sm-block">
+            <div class="text-white small fw-bold">{{ user.get_full_name|default:user.username }}</div>
+            <div>
+              {% if user.is_superuser %}
+                <span class="badge-role-owner"><i class="bi bi-shield-check me-1"></i>Owner</span>
+              {% else %}
+                <span class="badge-role-staff"><i class="bi bi-person-badge me-1"></i>Staff</span>
+              {% endif %}
+            </div>
+          </div>
+          <a href="{% url 'pos:logout' %}" class="btn btn-outline-warning btn-sm rounded-pill px-3">
+            <i class="bi bi-box-arrow-right me-1"></i> Logout
+          </a>
+        {% else %}
+          <a href="{% url 'pos:login' %}" class="btn btn-warning btn-sm rounded-pill px-4 fw-bold">
+            Sign In
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- Main Page Content -->
+<main class="py-4">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
+

@@ -1,0 +1,96 @@
+{% extends 'pos/base.html' %}
+
+{% block title %}Owner Dashboard | Rayara Cafe POS{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h2 class="serif-brand fw-bold mb-1" style="color: var(--rayara-bronze);">OWNER MANAGEMENT & ANALYTICS</h2>
+      <p class="text-muted small mb-0">Business overview, menu pricing, staff controls & sales reports.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="/admin/" target="_blank" class="btn btn-outline-secondary btn-sm rounded-pill">
+        <i class="bi bi-database me-1"></i> Full Django Admin
+      </a>
+      <button class="btn btn-warning btn-sm rounded-pill text-dark fw-bold" onclick="location.reload()">
+        <i class="bi bi-arrow-clockwise me-1"></i> Refresh Data
+      </button>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row -->
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+      <div class="card card-rayara p-3">
+        <span class="text-muted small fw-semibold">Today's Revenue</span>
+        <h3 class="fw-bold mt-1 mb-0" style="color: var(--rayara-bronze);">₹0.00</h3>
+        <small class="text-success mt-1 d-block"><i class="bi bi-cash-stack me-1"></i>Cash + UPI + Card</small>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card card-rayara p-3">
+        <span class="text-muted small fw-semibold">Total Orders Today</span>
+        <h3 class="fw-bold mt-1 mb-0" style="color: var(--rayara-bronze);">0</h3>
+        <small class="text-muted mt-1 d-block">0 Dine-In · 0 Takeaway</small>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card card-rayara p-3">
+        <span class="text-muted small fw-semibold">Active Kitchen Jobs</span>
+        <h3 class="fw-bold mt-1 mb-0" style="color: var(--rayara-amber-glow);">0</h3>
+        <small class="text-muted mt-1 d-block">All printed successfully</small>
+      </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <div class="card card-rayara p-3">
+        <span class="text-muted small fw-semibold">Tables Occupied</span>
+        <h3 class="fw-bold mt-1 mb-0" style="color: var(--rayara-olive);">0 / 10</h3>
+        <small class="text-muted mt-1 d-block">10 Available</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Management Tabs -->
+  <div class="card card-rayara p-4">
+    <ul class="nav nav-pills mb-3" id="adminTabs" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active rounded-pill fw-semibold" id="menu-tab" data-bs-toggle="pill" data-bs-target="#tab-menu">
+          <i class="bi bi-menu-button-wide me-1"></i> Menu & Pricing
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link rounded-pill fw-semibold" id="orders-tab" data-bs-toggle="pill" data-bs-target="#tab-orders">
+          <i class="bi bi-card-checklist me-1"></i> Order History
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link rounded-pill fw-semibold" id="staff-tab" data-bs-toggle="pill" data-bs-target="#tab-staff">
+          <i class="bi bi-people me-1"></i> Staff Accounts
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link rounded-pill fw-semibold" id="printers-tab" data-bs-toggle="pill" data-bs-target="#tab-printers">
+          <i class="bi bi-printer me-1"></i> Printers & Queue
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="adminTabContent">
+      <div class="tab-pane fade show active p-2" id="tab-menu">
+        <p class="text-muted small">Manage food items, pricing, availability and category order.</p>
+      </div>
+      <div class="tab-pane fade p-2" id="tab-orders">
+        <p class="text-muted small">View all dine-in and takeaway orders with audit logs.</p>
+      </div>
+      <div class="tab-pane fade p-2" id="tab-staff">
+        <p class="text-muted small">Create and reset staff passwords for tablet operators.</p>
+      </div>
+      <div class="tab-pane fade p-2" id="tab-printers">
+        <p class="text-muted small">Configure TVS ESC/POS thermal printers (USB spooler or Ethernet IP).</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

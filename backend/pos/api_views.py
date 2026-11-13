@@ -454,7 +454,7 @@ def api_kitchen_orders(request):
                 })
 
         elapsed_sec = int((now - ord.created_at).total_seconds())
-        server_name = ord.created_by.get_full_name() or ord.created_by.username
+        server_name = (ord.created_by.get_full_name() or ord.created_by.username) if ord.created_by else 'Staff'
 
         # Get formatted KOT text preview from the latest print job if available
         kot_job = ord.print_jobs.filter(printer_type='kitchen').order_by('-created_at').first()

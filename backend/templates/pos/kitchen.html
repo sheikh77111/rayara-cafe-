@@ -335,12 +335,12 @@
 </div>
 {% endblock %}
 
-{% block extra_scripts %}
+{% block extra_js %}
 <script>
   let kdsOrders = [];
   let kdsFilter = 'all';
   let soundEnabled = true;
-  let previousOrderIds = new Set();
+  let previousOrdersMap = new Map(); // id -> { count, batch }
   let isFirstLoad = true;
   let pollInterval = null;
   let alertTimeout = null;
@@ -517,7 +517,8 @@
   async function fetchKitchenOrders() {
     try {
       const res = await fetch('/pos/api/kitchen/orders/?include_completed=1', {
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
       });
       if (!res.ok) {
         document.getElementById('sync-indicator').innerText = 'Sync Retrying...';
@@ -534,29 +535,35 @@
       const compBadge = document.getElementById('badge-count-completed');
       if (compBadge) compBadge.innerText = data.counts.completed || 0;
 
-      const currentIds = new Set(data.orders.map(o => o.id));
+      const currentMap = new Map();
 
-      // Trigger bell chime and alert when a NEW order arrives
+      // Trigger bell chime and alert when a NEW order or ADD-ON items arrive
       if (!isFirstLoad) {
-        let hasNew = false;
-        let newOrderTarget = '';
-        let itemsCount = 0;
+        let alertMessage = null;
 
         data.orders.forEach(o => {
-          if (!previousOrderIds.has(o.id) && o.status === 'new') {
-            hasNew = true;
-            newOrderTarget = o.order_type === 'dine_in' ? `Table ${o.table_number || '?'}` : 'Takeaway';
-            itemsCount = o.total_items_count;
+          const target = o.order_type === 'dine_in' ? `Table ${o.table_number || '?'}` : 'Takeaway';
+          const prev = previousOrdersMap.get(o.id);
+
+          if (!prev && o.status === 'new') {
+            alertMessage = `🔔 NEW KOT: ${target} (${o.total_items_count} items) placed!`;
+          } else if (prev && (o.total_items_count > prev.count || o.current_batch > prev.batch)) {
+            const addedQty = o.total_items_count - prev.count;
+            alertMessage = `🔥 ADD-ON KOT: ${target} (+${addedQty > 0 ? addedQty : 'new'} items, Batch #${o.current_batch}) added!`;
           }
         });
 
-        if (hasNew) {
+        if (alertMessage) {
           playKitchenBell();
-          showKdsAlert(`🔔 NEW KOT: ${newOrderTarget} (${itemsCount} items) placed!`);
+          showKdsAlert(alertMessage);
         }
       }
 
-      previousOrderIds = currentIds;
+      data.orders.forEach(o => {
+        currentMap.set(o.id, { count: o.total_items_count, batch: o.current_batch });
+      });
+
+      previousOrdersMap = currentMap;
       isFirstLoad = false;
       kdsOrders = data.orders || [];
       renderKitchenOrders();
@@ -722,6 +729,7 @@
           'Content-Type': 'application/json',
           'X-CSRFToken': csrfToken
         },
+        credentials: 'same-origin',
         body: JSON.stringify({ order_id: orderId, status: newStatus })
       });
       const data = await res.json();

@@ -250,7 +250,7 @@
       <!-- Filter Buttons -->
       <div class="btn-group ms-sm-2" role="group">
         <button type="button" class="btn btn-kds-filter active" onclick="setKdsFilter('all')" id="flt-all">
-          All Orders <span class="badge bg-secondary ms-1" id="badge-count-all">0</span>
+          Active <span class="badge bg-secondary ms-1" id="badge-count-all">0</span>
         </button>
         <button type="button" class="btn btn-kds-filter" onclick="setKdsFilter('new')" id="flt-new">
           🔥 New <span class="badge bg-warning text-dark ms-1" id="badge-count-new">0</span>
@@ -260,6 +260,9 @@
         </button>
         <button type="button" class="btn btn-kds-filter" onclick="setKdsFilter('ready')" id="flt-ready">
           ✅ Ready <span class="badge bg-success ms-1" id="badge-count-ready">0</span>
+        </button>
+        <button type="button" class="btn btn-kds-filter" onclick="setKdsFilter('completed')" id="flt-completed">
+          📜 Served <span class="badge bg-secondary ms-1" id="badge-count-completed">0</span>
         </button>
       </div>
     </div>
@@ -490,7 +493,7 @@
   // Filter switching
   function setKdsFilter(filter) {
     kdsFilter = filter;
-    ['all', 'new', 'preparing', 'ready'].forEach(f => {
+    ['all', 'new', 'preparing', 'ready', 'completed'].forEach(f => {
       const btn = document.getElementById(`flt-${f}`);
       if (btn) {
         if (f === filter) {
@@ -513,7 +516,7 @@
   // Fetch live active orders from Django API
   async function fetchKitchenOrders() {
     try {
-      const res = await fetch('/pos/api/kitchen/orders/', {
+      const res = await fetch('/pos/api/kitchen/orders/?include_completed=1', {
         headers: { 'Accept': 'application/json' }
       });
       if (!res.ok) {
@@ -528,6 +531,8 @@
       document.getElementById('badge-count-new').innerText = data.counts.new || 0;
       document.getElementById('badge-count-preparing').innerText = data.counts.preparing || 0;
       document.getElementById('badge-count-ready').innerText = data.counts.ready || 0;
+      const compBadge = document.getElementById('badge-count-completed');
+      if (compBadge) compBadge.innerText = data.counts.completed || 0;
 
       const currentIds = new Set(data.orders.map(o => o.id));
 
@@ -569,7 +574,9 @@
 
     // Filter list
     let filtered = kdsOrders;
-    if (kdsFilter !== 'all') {
+    if (kdsFilter === 'all') {
+      filtered = kdsOrders.filter(o => o.status !== 'completed' && o.status !== 'cancelled');
+    } else {
       filtered = kdsOrders.filter(o => o.status === kdsFilter);
     }
 
@@ -610,6 +617,12 @@
           <button class="btn btn-info w-100 fw-bold py-2 text-dark shadow-sm" onclick="updateOrderStatus(${ord.id}, 'completed', this)">
             <i class="bi bi-bell-fill me-1"></i> Mark Served
           </button>
+        `;
+      } else if (ord.status === 'completed') {
+        actionButtons = `
+          <div class="py-2 px-3 text-center rounded-3 bg-secondary bg-opacity-25 text-secondary small fw-bold">
+            <i class="bi bi-check2-all me-1 text-success"></i> Food Served
+          </div>
         `;
       }
 

@@ -355,6 +355,18 @@
       if (!res.ok) return;
       state.tables = await res.json();
       renderTablePicker();
+
+      // Automatically sync existingOrderId for the currently active table
+      if (state.orderType === 'dine_in') {
+        const currentTable = state.tables.find(t => t.number === state.selectedTable);
+        if (currentTable && currentTable.active_order) {
+          state.existingOrderId = currentTable.active_order.id;
+          updateCartTargetTitle(`Table ${currentTable.number} (Active: #${currentTable.active_order.order_number})`);
+        } else {
+          state.existingOrderId = null;
+          updateCartTargetTitle(`Table ${state.selectedTable}`);
+        }
+      }
     } catch (e) {
       console.error("Error loading tables:", e);
     }
@@ -457,7 +469,7 @@
 
       return `
         <div class="col-sm-6 col-md-4 col-xl-3">
-          <div class="food-card ${!isAvailable ? 'unavailable' : ''}">
+          <div class="food-card ${!isAvailable ? 'unavailable' : ''}" onclick="if(${isAvailable}) addToCart(${p.id}, '${escapeHtml(p.name)}', ${p.price})" style="cursor: pointer;">
             ${imgHtml}
             <div class="p-2 d-flex flex-column flex-grow-1">
               <span class="text-muted" style="font-size: 11px;">${p.category_name}</span>
@@ -465,7 +477,7 @@
               <div class="d-flex justify-content-between align-items-center mt-auto pt-2">
                 <span class="fw-bold" style="color: var(--rayara-bronze);">₹${price}</span>
                 ${isAvailable
-                  ? `<button class="btn btn-sm btn-rayara-primary py-1 px-2" onclick="addToCart(${p.id}, '${escapeHtml(p.name)}', ${p.price})">
+                  ? `<button class="btn btn-sm btn-rayara-primary py-1 px-2.5 rounded-pill" onclick="event.stopPropagation(); addToCart(${p.id}, '${escapeHtml(p.name)}', ${p.price})">
                        <i class="bi bi-plus-lg"></i> Add
                      </button>`
                   : `<span class="badge bg-secondary">Out of Stock</span>`
@@ -532,16 +544,25 @@
     const cont = document.getElementById('cart-items-container');
     const items = Object.values(state.cart);
 
+    const sendBtn = document.getElementById('btn-send-kitchen');
+
     if (items.length === 0) {
       cont.innerHTML = `
         <div class="text-center text-muted py-5">
           <i class="bi bi-cart3 fs-1 text-secondary opacity-50 mb-2 d-block"></i>
-          <p class="small">Cart is empty.<br>Tap any food item to add.</p>
+          <p class="small">Cart is empty.<br>Tap any food item on the left to add.</p>
         </div>
       `;
       document.getElementById('cart-subtotal').innerText = '₹0.00';
       document.getElementById('cart-tax').innerText = '₹0.00';
       document.getElementById('cart-total').innerText = '₹0.00';
+
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.style.opacity = '0.55';
+        sendBtn.style.cursor = 'not-allowed';
+        sendBtn.innerHTML = `<i class="bi bi-cart-x fs-5"></i> <span>Cart is Empty — Tap Food on Left</span>`;
+      }
       return;
     }
 
@@ -578,10 +599,19 @@
 
     const tax = subtotal * 0.05; // 5% GST
     const total = subtotal + tax;
+    const totalQty = items.reduce((s, it) => s + it.qty, 0);
 
     document.getElementById('cart-subtotal').innerText = `₹${subtotal.toFixed(2)}`;
     document.getElementById('cart-tax').innerText = `₹${tax.toFixed(2)}`;
     document.getElementById('cart-total').innerText = `₹${total.toFixed(2)}`;
+
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.style.opacity = '1';
+      sendBtn.style.cursor = 'pointer';
+      const actionLabel = state.existingOrderId ? `SEND ADD-ON (${totalQty} ITEMS)` : `SEND TO KITCHEN (${totalQty} ITEMS)`;
+      sendBtn.innerHTML = `<i class="bi bi-fire fs-5"></i> <span>${actionLabel} · ₹${total.toFixed(2)}</span>`;
+    }
   }
 
   async function submitOrderToKitchen() {
@@ -644,7 +674,12 @@
           alert("Error: " + (data.error || "Failed to submit order."));
         }
       } else {
-        alert(`Success! Order #${data.order_number} sent to Kitchen Thermal Printer!`);
+        const orderNum = data.order_number || ('#' + (data.order_id || ''));
+        const batchNum = data.batch || 1;
+        const msg = batchNum > 1
+          ? `🔥 Success! Add-On items (Batch #${batchNum}) sent to Kitchen Screen for ${state.orderType === 'dine_in' ? 'Table ' + state.selectedTable : 'Takeaway'}!`
+          : `🎉 Success! Order ${orderNum} sent to Kitchen Screen!`;
+        alert(msg);
         clearCart();
         loadTables();
         loadActiveOrders();
@@ -653,8 +688,7 @@
       console.error(e);
       alert("Network error: Could not reach POS server.");
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = `<i class="bi bi-fire fs-5"></i> <span>SEND TO KITCHEN (KOT)</span>`;
+      renderCart();
     }
   }
 

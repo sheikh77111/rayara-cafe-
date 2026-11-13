@@ -412,17 +412,21 @@ def api_kitchen_orders(request):
     elapsed-time metrics, batch tracking, and special kitchen instructions.
     """
     now = timezone.now()
+    include_completed = request.GET.get('include_completed') == '1'
+    target_statuses = ['new', 'preparing', 'ready', 'completed'] if include_completed else ['new', 'preparing', 'ready']
+
     orders = Order.objects.filter(
-        status__in=['new', 'preparing', 'ready']
-    ).prefetch_related('items', 'items__product').order_by('created_at')
+        status__in=target_statuses
+    ).prefetch_related('items', 'items__product').order_by('-created_at' if include_completed else 'created_at')
 
     result = []
-    counts = {'total': 0, 'new': 0, 'preparing': 0, 'ready': 0}
+    counts = {'total': 0, 'new': 0, 'preparing': 0, 'ready': 0, 'completed': 0}
 
     for ord in orders:
-        counts['total'] += 1
         if ord.status in counts:
             counts[ord.status] += 1
+        if ord.status in ('new', 'preparing', 'ready'):
+            counts['total'] += 1
 
         active_items = []
         cancelled_items = []

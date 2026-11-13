@@ -9,23 +9,27 @@
     --kds-card-bg: #1C1E24;
     --kds-card-border: #2D3139;
     --kds-amber: #F5A623;
+    --kds-amber-glow: #FBBF24;
     --kds-cyan: #38BDF8;
     --kds-green: #10B981;
     --kds-red: #EF4444;
   }
+  /* Force dark kitchen mode without light background pattern */
   body {
     background-color: var(--kds-bg) !important;
-    color: #E2E8F0;
+    background-image: none !important;
+    color: #F1F5F9 !important;
   }
   .navbar-rayara {
-    background: #1A1C23 !important;
-    border-bottom: 1px solid #2D3139 !important;
+    background: #18191E !important;
+    border-bottom: 1px solid #2B2E37 !important;
   }
   .kds-container {
     max-width: 100%;
-    padding: 14px;
+    padding: 16px;
   }
-  /* Pulse Animation for New Orders */
+
+  /* Pulse Animations for Incoming Orders */
   @keyframes glow-pulse {
     0% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.7); }
     70% { box-shadow: 0 0 0 14px rgba(245, 166, 35, 0); }
@@ -36,6 +40,8 @@
     50% { border-color: rgba(245, 166, 35, 0.9); }
     100% { border-color: rgba(239, 68, 68, 0.9); }
   }
+
+  /* Order Cards */
   .kds-card {
     background-color: var(--kds-card-bg);
     border: 2px solid var(--kds-card-border);
@@ -45,6 +51,7 @@
     height: 100%;
     transition: transform 0.15s ease, border-color 0.2s ease;
     overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   }
   .kds-card.status-new {
     border-color: var(--kds-amber);
@@ -61,7 +68,7 @@
   }
   .kds-card-header {
     padding: 12px 14px;
-    background-color: #242730;
+    background-color: #22252E;
     border-bottom: 1px solid #2D3139;
   }
   .kds-table-title {
@@ -69,6 +76,7 @@
     font-weight: 800;
     letter-spacing: 0.5px;
     line-height: 1.1;
+    color: #FFFFFF;
   }
   .kds-item-row {
     padding: 10px 14px;
@@ -131,51 +139,103 @@
   .timer-amber { background: #78350F; color: #FBBF24; }
   .timer-red   { background: #7F1D1D; color: #F87171; }
 
-  /* Top Slide Banner for New KOT Alert */
-  #kds-alert-toast {
+  /* Floating Notification Toast (Positioned top-right, never blocking buttons) */
+  .kds-toast {
     position: fixed;
-    top: 65px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 9999;
+    top: 75px;
+    right: 20px;
+    z-index: 1060;
     min-width: 320px;
-    max-width: 90vw;
-    display: none;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    max-width: 440px;
+    background: #1E2129;
+    border: 2px solid var(--kds-amber);
+    color: #FFFFFF;
+    padding: 12px 18px;
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(245, 166, 35, 0.3);
+    display: none !important;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: auto;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    transform: translateY(-10px);
+    opacity: 0;
   }
+  .kds-toast.show {
+    display: flex !important;
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  /* Audio Unlock Prompt Banner */
+  #audio-unlock-banner {
+    background: linear-gradient(90deg, #b45309, #d97706);
+    color: #FFFFFF;
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3);
+  }
+
+  /* Filter Navigation Buttons */
   .btn-kds-filter {
-    background: #1E2128;
+    background: #1C1E25;
     color: #94A3B8;
-    border: 1px solid #333842;
+    border: 1.5px solid #2D313A;
     font-size: 13px;
     font-weight: 600;
     padding: 6px 14px;
     border-radius: 20px;
+    transition: all 0.15s ease;
+  }
+  .btn-kds-filter:hover {
+    color: #FFFFFF;
+    border-color: #475569;
   }
   .btn-kds-filter.active {
     background: var(--kds-amber);
     color: #121316;
     border-color: var(--kds-amber);
-    font-weight: 700;
+    font-weight: 800;
+    box-shadow: 0 2px 10px rgba(245, 166, 35, 0.3);
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Top Alert Banner for Incoming Orders -->
-<div id="kds-alert-toast" class="alert alert-warning border-2 border-warning text-dark py-2.5 px-4 rounded-4 fw-bold d-flex align-items-center justify-content-between shadow-lg">
-  <div class="d-flex align-items-center gap-2">
-    <i class="bi bi-bell-fill fs-5 text-danger animate-bounce"></i>
-    <span id="kds-alert-message">New Order Received!</span>
+<!-- Hidden CSRF token for AJAX status updates -->
+{% csrf_token %}
+<input type="hidden" id="kds-csrf-token" value="{{ csrf_token }}">
+
+<!-- Floating Notification Toast (Only displays when an order arrives or test button clicked) -->
+<div id="kds-alert-toast" class="kds-toast">
+  <div class="d-flex align-items-center gap-2.5">
+    <span class="fs-5 text-warning"><i class="bi bi-bell-fill"></i></span>
+    <span id="kds-alert-message" class="fw-bold small"></span>
   </div>
-  <button type="button" class="btn-close ms-3" onclick="hideAlertToast()"></button>
+  <button type="button" class="btn-close btn-close-white ms-3" onclick="hideAlertToast()" aria-label="Close"></button>
 </div>
 
 <div class="kds-container">
+  <!-- First-time Audio Unlock Prompt Banner (Required by browsers to play chime without mute) -->
+  <div id="audio-unlock-banner" onclick="unlockAudioPrompt()">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-volume-up-fill fs-5"></i>
+      <span>Tap here to enable Kitchen Bell Chimes (Audio notification is ready!)</span>
+    </div>
+    <span class="badge bg-dark text-warning">Tap to Activate</span>
+  </div>
+
   <!-- Top Controls & Metrics Bar -->
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 pb-2 border-bottom border-secondary border-opacity-25">
-    <!-- Left: Brand & Live Indicator -->
-    <div class="d-flex align-items-center gap-3">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+    <!-- Left: Brand & Live Sync -->
+    <div class="d-flex flex-wrap align-items-center gap-3">
       <div class="d-flex align-items-center gap-2">
         <span class="fs-4 text-warning"><i class="bi bi-fire"></i></span>
         <div>
@@ -188,7 +248,7 @@
       </div>
 
       <!-- Filter Buttons -->
-      <div class="btn-group ms-lg-3" role="group">
+      <div class="btn-group ms-sm-2" role="group">
         <button type="button" class="btn btn-kds-filter active" onclick="setKdsFilter('all')" id="flt-all">
           All Orders <span class="badge bg-secondary ms-1" id="badge-count-all">0</span>
         </button>
@@ -204,7 +264,7 @@
       </div>
     </div>
 
-    <!-- Right: Sound & Display Utility Buttons -->
+    <!-- Right: Sound, Test Chime, Fullscreen Buttons -->
     <div class="d-flex align-items-center gap-2">
       <!-- Audio Bell Toggle Button -->
       <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 fw-bold" id="btn-sound-toggle" onclick="toggleSound()">
@@ -213,17 +273,17 @@
       </button>
 
       <!-- Test Chime Button -->
-      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-3" onclick="testSoundChime()" title="Test notification sound">
+      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-3 text-light" onclick="testSoundChime()" title="Test notification chime">
         <i class="bi bi-bell-fill text-warning me-1"></i> Test Bell
       </button>
 
       <!-- Fullscreen Toggle Button -->
-      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-3" onclick="toggleFullscreen()" title="Toggle full screen">
+      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-3 text-light" onclick="toggleFullscreen()" title="Toggle full screen">
         <i class="bi bi-arrows-fullscreen text-secondary me-1"></i> Fullscreen
       </button>
 
-      <!-- Refresh Now -->
-      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-2.5" onclick="fetchKitchenOrders()" title="Refresh now">
+      <!-- Refresh Now Button -->
+      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-2.5 text-light" onclick="fetchKitchenOrders()" title="Refresh now">
         <i class="bi bi-arrow-clockwise text-secondary"></i>
       </button>
     </div>
@@ -234,13 +294,23 @@
     <!-- Order cards rendered dynamically via JavaScript -->
   </div>
 
-  <!-- Empty State when no orders -->
+  <!-- Empty State when no active orders -->
   <div id="kitchen-empty-state" class="text-center py-5 d-none">
-    <div class="text-secondary opacity-50 mb-3" style="font-size: 54px;">
-      <i class="bi bi-check2-circle"></i>
+    <div class="p-4 rounded-4 mx-auto" style="max-width: 480px; background: #1C1E24; border: 1.5px dashed #2D313A;">
+      <div class="text-warning opacity-75 mb-3" style="font-size: 48px;">
+        <i class="bi bi-fire"></i>
+      </div>
+      <h3 class="h5 fw-bold text-white mb-2">Kitchen Queue is Clear</h3>
+      <p class="text-secondary small mb-3">When a waiter creates an order on their tablet and taps <b>"Send to Kitchen"</b>, it will immediately ring the bell chime and display the ticket here!</p>
+      <div class="d-flex justify-content-center gap-2 flex-wrap">
+        <a href="{% url 'pos:tablet' %}" class="btn btn-sm btn-outline-warning rounded-pill px-3 fw-bold" target="_blank">
+          <i class="bi bi-tablet me-1"></i> Open Tablet to Place Order
+        </a>
+        <button class="btn btn-sm btn-dark border-secondary rounded-pill px-3 text-light" onclick="testSoundChime()">
+          <i class="bi bi-bell-fill text-warning me-1"></i> Test Bell Chime
+        </button>
+      </div>
     </div>
-    <h3 class="h5 fw-bold text-light">All Caught Up, Chef!</h3>
-    <p class="text-secondary small mb-0">No active kitchen orders right now. Waiting for new orders from the staff tablet...</p>
   </div>
 </div>
 
@@ -270,9 +340,10 @@
   let previousOrderIds = new Set();
   let isFirstLoad = true;
   let pollInterval = null;
+  let alertTimeout = null;
   let audioContext = null;
 
-  // Initialize Web Audio API synthesizer for natural bell chime
+  // Web Audio API Synthesizer for high-fidelity restaurant kitchen bell
   function getAudioContext() {
     if (!audioContext) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -286,7 +357,7 @@
     return audioContext;
   }
 
-  // Dual-tone restaurant kitchen bell sound (880Hz -> 1046Hz)
+  // Dual-tone restaurant kitchen bell chime (880Hz + 1046Hz + 440Hz resonance)
   function playKitchenBell() {
     if (!soundEnabled) return;
     try {
@@ -294,63 +365,70 @@
       if (!ctx) return;
 
       const now = ctx.currentTime;
-      // High chime tone
+
+      // 1. High Chime (880Hz to 1046.5Hz)
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(880, now); // A5 note
-      osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.15); // C6 note
-      gain1.gain.setValueAtTime(0.4, now);
+      osc1.frequency.setValueAtTime(880, now);
+      osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.12);
+      gain1.gain.setValueAtTime(0.5, now);
       gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
       osc1.start(now);
       osc1.stop(now + 0.9);
 
-      // Low bell body tone
+      // 2. High Harmonic Sparkle (1318.5Hz - E6)
       const osc2 = ctx.createOscillator();
       const gain2 = ctx.createGain();
-      osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(440, now);
-      gain2.gain.setValueAtTime(0.3, now);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1318.5, now + 0.05);
+      gain2.gain.setValueAtTime(0.3, now + 0.05);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
-      osc2.start(now);
-      osc2.stop(now + 1.2);
+      osc2.start(now + 0.05);
+      osc2.stop(now + 0.7);
+
+      // 3. Brass Bell Resonance (440Hz)
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.type = 'triangle';
+      osc3.frequency.setValueAtTime(440, now);
+      gain3.gain.setValueAtTime(0.35, now);
+      gain3.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.start(now);
+      osc3.stop(now + 1.2);
     } catch (e) {
-      console.warn("Audio playback exception:", e);
+      console.warn("Audio bell playback exception:", e);
     }
   }
 
-  // 3-tone urgency chime for Add-ons or Cancellations
-  function playAlertChime() {
-    if (!soundEnabled) return;
-    try {
-      const ctx = getAudioContext();
-      if (!ctx) return;
-      const now = ctx.currentTime;
-      [0, 0.12, 0.24].forEach((offset, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(idx === 2 ? 1174 : 880, now + offset);
-        gain.gain.setValueAtTime(0.2, now + offset);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.2);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + offset);
-        osc.stop(now + offset + 0.2);
-      });
-    } catch (e) {
-      console.warn("Alert chime exception:", e);
+  // Audio activation helper
+  function checkAudioState() {
+    const banner = document.getElementById('audio-unlock-banner');
+    if (!audioContext || audioContext.state === 'suspended') {
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
     }
+  }
+
+  function unlockAudioPrompt() {
+    getAudioContext();
+    playKitchenBell();
+    const banner = document.getElementById('audio-unlock-banner');
+    banner.style.display = 'none';
+    showKdsAlert("🔊 Kitchen Bell Chime Activated!");
   }
 
   function testSoundChime() {
     getAudioContext();
     playKitchenBell();
-    showKdsAlert("🔔 Sound Test: Chime Working Loud & Clear!");
+    showKdsAlert("🔔 Sound Test: Kitchen Bell Chime Working!");
   }
 
   function toggleSound() {
@@ -364,10 +442,12 @@
       text.innerText = 'Sound ON';
       getAudioContext();
       playKitchenBell();
+      showKdsAlert("🔊 Sound Unmuted: Bell chimes enabled.");
     } else {
-      btn.className = 'btn btn-sm btn-secondary rounded-pill px-3';
+      btn.className = 'btn btn-sm btn-secondary rounded-pill px-3 text-light';
       icon.className = 'bi bi-volume-mute-fill me-1';
       text.innerText = 'Sound MUTED';
+      showKdsAlert("🔇 Sound Muted: Visual alerts only.");
     }
   }
 
@@ -383,29 +463,41 @@
     }
   }
 
+  // Show floating toast notification (never blocks buttons!)
   function showKdsAlert(message) {
     const toast = document.getElementById('kds-alert-toast');
     const msgElem = document.getElementById('kds-alert-message');
     msgElem.innerText = message;
-    toast.style.display = 'flex';
-    setTimeout(() => {
+    toast.classList.add('show');
+
+    if (alertTimeout) {
+      clearTimeout(alertTimeout);
+    }
+    alertTimeout = setTimeout(() => {
       hideAlertToast();
-    }, 6000);
+    }, 4500);
   }
 
   function hideAlertToast() {
     const toast = document.getElementById('kds-alert-toast');
-    toast.style.display = 'none';
+    toast.classList.remove('show');
+    if (alertTimeout) {
+      clearTimeout(alertTimeout);
+      alertTimeout = null;
+    }
   }
 
+  // Filter switching
   function setKdsFilter(filter) {
     kdsFilter = filter;
     ['all', 'new', 'preparing', 'ready'].forEach(f => {
       const btn = document.getElementById(`flt-${f}`);
-      if (f === filter) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
+      if (btn) {
+        if (f === filter) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
       }
     });
     renderKitchenOrders();
@@ -418,7 +510,7 @@
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
 
-  // Fetch live active kitchen orders
+  // Fetch live active orders from Django API
   async function fetchKitchenOrders() {
     try {
       const res = await fetch('/pos/api/kitchen/orders/', {
@@ -439,20 +531,23 @@
 
       const currentIds = new Set(data.orders.map(o => o.id));
 
-      // Detect newly arrived orders for sound alert & notification
+      // Trigger bell chime and alert when a NEW order arrives
       if (!isFirstLoad) {
         let hasNew = false;
         let newOrderTarget = '';
+        let itemsCount = 0;
+
         data.orders.forEach(o => {
           if (!previousOrderIds.has(o.id) && o.status === 'new') {
             hasNew = true;
             newOrderTarget = o.order_type === 'dine_in' ? `Table ${o.table_number || '?'}` : 'Takeaway';
+            itemsCount = o.total_items_count;
           }
         });
 
         if (hasNew) {
           playKitchenBell();
-          showKdsAlert(`🔔 NEW KOT: ${newOrderTarget} just placed by staff!`);
+          showKdsAlert(`🔔 NEW KOT: ${newOrderTarget} (${itemsCount} items) placed!`);
         }
       }
 
@@ -467,7 +562,7 @@
     }
   }
 
-  // Render order cards
+  // Render cards
   function renderKitchenOrders() {
     const grid = document.getElementById('kitchen-orders-grid');
     const emptyState = document.getElementById('kitchen-empty-state');
@@ -496,23 +591,23 @@
       const targetTitle = ord.order_type === 'dine_in' ? `TABLE ${ord.table_number || '?'}` : `TAKEAWAY`;
       const targetSub = ord.order_type === 'takeaway' && ord.customer_name ? `(${ord.customer_name})` : '';
 
-      // Action buttons depending on status
+      // Action buttons depending on order status
       let actionButtons = '';
       if (ord.status === 'new') {
         actionButtons = `
-          <button class="btn btn-warning w-100 fw-bold py-2 text-dark shadow-sm" onclick="updateOrderStatus(${ord.id}, 'preparing')">
+          <button class="btn btn-warning w-100 fw-bold py-2 text-dark shadow-sm" onclick="updateOrderStatus(${ord.id}, 'preparing', this)">
             <i class="bi bi-fire me-1"></i> Start Cooking
           </button>
         `;
       } else if (ord.status === 'preparing') {
         actionButtons = `
-          <button class="btn btn-success w-100 fw-bold py-2 shadow-sm" onclick="updateOrderStatus(${ord.id}, 'ready')">
+          <button class="btn btn-success w-100 fw-bold py-2 shadow-sm" onclick="updateOrderStatus(${ord.id}, 'ready', this)">
             <i class="bi bi-check-circle-fill me-1"></i> Mark Ready
           </button>
         `;
       } else if (ord.status === 'ready') {
         actionButtons = `
-          <button class="btn btn-info w-100 fw-bold py-2 text-dark shadow-sm" onclick="updateOrderStatus(${ord.id}, 'completed')">
+          <button class="btn btn-info w-100 fw-bold py-2 text-dark shadow-sm" onclick="updateOrderStatus(${ord.id}, 'completed', this)">
             <i class="bi bi-bell-fill me-1"></i> Mark Served
           </button>
         `;
@@ -534,7 +629,7 @@
         `;
       });
 
-      // Cancelled items (if any)
+      // Cancelled items
       ord.cancelled_items.forEach(c => {
         itemsHtml += `
           <div class="kds-item-row opacity-50 bg-danger bg-opacity-10">
@@ -547,8 +642,8 @@
         `;
       });
 
-      // Addon banner
-      const addonBanner = ord.has_addons ? `<div class="kds-addon-banner"><i class="bi bi-plus-circle-fill me-1"></i> Add-on Items Added (Batch #${ord.current_batch})</div>` : '';
+      // Add-on banner
+      const addonBanner = ord.has_addons ? `<div class="kds-addon-banner"><i class="bi bi-plus-circle-fill me-1"></i> Add-on Items (Batch #${ord.current_batch})</div>` : '';
 
       html += `
         <div class="col" id="order-card-${ord.id}">
@@ -557,7 +652,7 @@
             <!-- Card Header -->
             <div class="kds-card-header">
               <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="badge ${ord.order_type === 'dine_in' ? 'bg-primary' : 'bg-purple'}" style="font-size: 11px;">
+                <span class="badge ${ord.order_type === 'dine_in' ? 'bg-primary' : 'bg-warning text-dark'}" style="font-size: 11px;">
                   ${ord.order_type === 'dine_in' ? 'DINE-IN' : 'TAKEAWAY'}
                 </span>
                 <span class="timer-pill ${timerClass}" id="timer-val-${ord.id}" data-seconds="${ord.elapsed_seconds}">
@@ -565,7 +660,7 @@
                 </span>
               </div>
               <div class="d-flex justify-content-between align-items-baseline">
-                <div class="kds-table-title text-white">
+                <div class="kds-table-title">
                   ${targetTitle} <span class="fs-6 text-secondary fw-normal">${targetSub}</span>
                 </div>
                 <div class="text-secondary small font-monospace">#${ord.order_number}</div>
@@ -582,11 +677,11 @@
             </div>
 
             <!-- Card Footer -->
-            <div class="p-2.5 bg-dark bg-opacity-50 border-top border-secondary border-opacity-25 d-flex gap-2">
+            <div class="p-2.5 bg-dark bg-opacity-75 border-top border-secondary border-opacity-25 d-flex gap-2">
               <div class="flex-grow-1">
                 ${actionButtons}
               </div>
-              <button class="btn btn-outline-secondary px-2.5" onclick="viewKotTicket('${ord.id}')" title="View Thermal KOT Preview">
+              <button class="btn btn-outline-secondary px-2.5 text-light" onclick="viewKotTicket('${ord.id}')" title="View Thermal KOT Preview">
                 <i class="bi bi-receipt"></i>
               </button>
             </div>
@@ -598,38 +693,48 @@
     grid.innerHTML = html;
   }
 
-  // Update order preparation status
-  async function updateOrderStatus(orderId, newStatus) {
+  // Update order preparation status (Start Cooking -> Ready -> Served)
+  async function updateOrderStatus(orderId, newStatus, btnElem) {
+    if (btnElem) {
+      btnElem.disabled = true;
+      btnElem.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Updating...';
+    }
+
+    const csrfToken = document.getElementById('kds-csrf-token')?.value || getCookie('csrftoken');
+
     try {
       const res = await fetch('/pos/api/kitchen/orders/update-status/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken')
+          'X-CSRFToken': csrfToken
         },
         body: JSON.stringify({ order_id: orderId, status: newStatus })
       });
       const data = await res.json();
       if (data.success) {
-        // Quick local state update
+        // Update local memory and re-render immediately
         const ord = kdsOrders.find(o => o.id === orderId);
         if (ord) {
           ord.status = newStatus;
           renderKitchenOrders();
         }
+        showKdsAlert(`✅ ${data.message}`);
         fetchKitchenOrders();
       } else {
         alert(data.error || 'Failed to update order status');
+        if (btnElem) btnElem.disabled = false;
       }
     } catch (err) {
       console.error("Status update error:", err);
+      if (btnElem) btnElem.disabled = false;
     }
   }
 
   function viewKotTicket(orderId) {
     const ord = kdsOrders.find(o => o.id == orderId);
     if (!ord || !ord.kot_text) {
-      document.getElementById('kot-preview-text').innerText = 'No KOT text available for this order.';
+      document.getElementById('kot-preview-text').innerText = 'No KOT ticket preview generated for this order.';
     } else {
       document.getElementById('kot-preview-text').innerText = ord.kot_text;
     }
@@ -676,13 +781,14 @@
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
-  // Unlock audio on first user touch / click
+  // Unlock audio on first user touch / click anywhere on the page
   document.addEventListener('click', function unlockAudio() {
     getAudioContext();
-    document.removeEventListener('click', unlockAudio);
-  }, { once: true });
+    checkAudioState();
+  });
 
-  // Initial fetch
+  // Initial fetch on page load
   fetchKitchenOrders();
+  setTimeout(checkAudioState, 600);
 </script>
 {% endblock %}

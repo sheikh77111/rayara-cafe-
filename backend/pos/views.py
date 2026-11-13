@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
-from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -256,6 +256,7 @@ def owner_dashboard(request):
 
 
 @staff_required
+@ensure_csrf_cookie
 def kitchen_dashboard(request):
     """
     Kitchen Display System (KDS) Screen (Phase 6 / Tablet KOT Screen).

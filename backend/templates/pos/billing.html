@@ -76,13 +76,26 @@
     <div class="col-lg-5">
       <div class="billing-card p-3 h-100 d-flex flex-column">
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-receipt me-1"></i> Unpaid Active Orders (<span id="unpaid-count">0</span>)</h6>
+          <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-receipt me-1"></i> Billing Queue (<span id="unpaid-count">0</span>)</h6>
           <input type="text" id="order-search" class="form-control form-control-sm w-50" placeholder="Filter table or order..." oninput="filterOrders()">
         </div>
 
-        <div class="flex-grow-1 overflow-y-auto pe-1" id="orders-list-container" style="max-height: calc(100vh - 220px);">
+        <!-- Filter Tabs: Food Served (Ready to Bill) vs In Kitchen vs All -->
+        <div class="btn-group btn-group-sm w-100 mb-2" role="group">
+          <button type="button" class="btn btn-warning active fw-bold py-1.5" id="btn-flt-served" onclick="setBillingTab('served')">
+            <i class="bi bi-check2-circle me-1"></i> Food Served (<span id="count-served">0</span>)
+          </button>
+          <button type="button" class="btn btn-outline-secondary fw-semibold py-1.5" id="btn-flt-kitchen" onclick="setBillingTab('kitchen')">
+            <i class="bi bi-fire me-1"></i> In Kitchen (<span id="count-kitchen">0</span>)
+          </button>
+          <button type="button" class="btn btn-outline-secondary fw-semibold py-1.5" id="btn-flt-all" onclick="setBillingTab('all')">
+            All (<span id="count-all">0</span>)
+          </button>
+        </div>
+
+        <div class="flex-grow-1 overflow-y-auto pe-1" id="orders-list-container" style="max-height: calc(100vh - 270px);">
           <div class="text-center text-muted py-5">
-            <span class="spinner-border spinner-border-sm me-2"></span> Loading active orders...
+            <span class="spinner-border spinner-border-sm me-2"></span> Loading orders...
           </div>
         </div>
       </div>
@@ -98,6 +111,9 @@
         </div>
 
         <div id="order-checkout-view" class="d-none">
+          <!-- Food Status Banner (Served vs Cooking) -->
+          <div id="bill-order-status-banner"></div>
+
           <!-- Active Order Header -->
           <div class="d-flex justify-content-between align-items-center pb-3 border-bottom mb-3">
             <div>
@@ -248,22 +264,115 @@
     selectedOrder: null,
     paymentMethod: 'cash',
     appliedCoupon: null,
-    lastSettledReceipt: null
+    lastSettledReceipt: null,
+    filterTab: 'served', // 'served' (default), 'kitchen', 'all'
+    knownServedIds: new Set(),
+    isFirstLoad: true
   };
 
   const CSRF_TOKEN = '{{ csrf_token }}';
+  let billingAudioCtx = null;
+
+  function playBillingChime() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!billingAudioCtx) billingAudioCtx = new AudioCtx();
+      if (billingAudioCtx.state === 'suspended') billingAudioCtx.resume();
+
+      const now = billingAudioCtx.currentTime;
+      // High ding-dong chime for cashier
+      const osc1 = billingAudioCtx.createOscillator();
+      const gain1 = billingAudioCtx.createGain();
+      osc1.frequency.setValueAtTime(587.33, now); // D5
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc1.connect(gain1);
+      gain1.connect(billingAudioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.4);
+
+      const osc2 = billingAudioCtx.createOscillator();
+      const gain2 = billingAudioCtx.createGain();
+      osc2.frequency.setValueAtTime(880, now + 0.15); // A5
+      gain2.gain.setValueAtTime(0.35, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+      osc2.connect(gain2);
+      gain2.connect(billingAudioCtx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.8);
+    } catch(e) {}
+  }
 
   document.addEventListener('DOMContentLoaded', () => {
     loadBillingOrders();
-    setInterval(loadBillingOrders, 10000);
+    setInterval(loadBillingOrders, 3500);
   });
+
+  function setBillingTab(tab) {
+    billingState.filterTab = tab;
+    ['served', 'kitchen', 'all'].forEach(t => {
+      const btn = document.getElementById(`btn-flt-${t}`);
+      if (btn) {
+        if (t === tab) {
+          btn.className = 'btn btn-warning active fw-bold py-1.5';
+        } else {
+          btn.className = 'btn btn-outline-secondary fw-semibold py-1.5';
+        }
+      }
+    });
+    updateUnpaidCountDisplay();
+    renderOrdersList();
+  }
+
+  function updateUnpaidCountDisplay() {
+    const servedCount = billingState.orders.filter(o => o.status === 'completed').length;
+    const kitchenCount = billingState.orders.filter(o => o.status !== 'completed').length;
+    const totalCount = billingState.orders.length;
+
+    const countServedElem = document.getElementById('count-served');
+    const countKitchenElem = document.getElementById('count-kitchen');
+    const countAllElem = document.getElementById('count-all');
+    const unpaidCountElem = document.getElementById('unpaid-count');
+
+    if (countServedElem) countServedElem.innerText = servedCount;
+    if (countKitchenElem) countKitchenElem.innerText = kitchenCount;
+    if (countAllElem) countAllElem.innerText = totalCount;
+    if (unpaidCountElem) {
+      unpaidCountElem.innerText = billingState.filterTab === 'served' ? servedCount :
+                                  billingState.filterTab === 'kitchen' ? kitchenCount : totalCount;
+    }
+  }
 
   async function loadBillingOrders() {
     try {
-      const res = await fetch('/pos/api/orders/active/');
+      const res = await fetch('/pos/api/orders/active/', {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      });
       if (!res.ok) return;
-      billingState.orders = await res.json();
-      document.getElementById('unpaid-count').innerText = billingState.orders.length;
+      const orders = await res.json();
+      billingState.orders = orders;
+
+      const servedOrders = orders.filter(o => o.status === 'completed');
+
+      // Chime if a newly served order arrives from kitchen
+      if (!billingState.isFirstLoad) {
+        let hasNewServed = false;
+        servedOrders.forEach(o => {
+          if (!billingState.knownServedIds.has(o.id)) {
+            hasNewServed = true;
+          }
+        });
+        if (hasNewServed) {
+          playBillingChime();
+        }
+      }
+
+      billingState.knownServedIds = new Set(servedOrders.map(o => o.id));
+      billingState.isFirstLoad = false;
+
+      updateUnpaidCountDisplay();
       renderOrdersList();
 
       // If selected order was updated, refresh details
@@ -292,6 +401,13 @@
     const query = document.getElementById('order-search').value.toLowerCase().trim();
     let list = billingState.orders;
 
+    // Filter by tab: served (default), kitchen, all
+    if (billingState.filterTab === 'served') {
+      list = list.filter(o => o.status === 'completed');
+    } else if (billingState.filterTab === 'kitchen') {
+      list = list.filter(o => o.status !== 'completed');
+    }
+
     if (query) {
       list = list.filter(o =>
         o.order_number.toLowerCase().includes(query) ||
@@ -302,7 +418,25 @@
     }
 
     if (list.length === 0) {
-      cont.innerHTML = `<div class="text-center text-muted py-5"><p class="small">No pending orders to settle.</p></div>`;
+      if (billingState.filterTab === 'served') {
+        cont.innerHTML = `
+          <div class="text-center text-muted py-5 px-3">
+            <i class="bi bi-check2-circle fs-1 text-success opacity-50 mb-2 d-block"></i>
+            <h6 class="fw-bold text-dark">No Food Served Waiting to Bill</h6>
+            <p class="small text-muted mb-0">When kitchen prepares food and taps <b>"Mark Served"</b>, the order automatically arrives here ready for payment!</p>
+          </div>
+        `;
+      } else if (billingState.filterTab === 'kitchen') {
+        cont.innerHTML = `
+          <div class="text-center text-muted py-5 px-3">
+            <i class="bi bi-fire fs-1 text-warning opacity-50 mb-2 d-block"></i>
+            <h6 class="fw-bold text-dark">No Orders in Kitchen</h6>
+            <p class="small text-muted mb-0">All current orders have either been served or settled.</p>
+          </div>
+        `;
+      } else {
+        cont.innerHTML = `<div class="text-center text-muted py-5"><p class="small">No pending orders to settle.</p></div>`;
+      }
       return;
     }
 
@@ -312,15 +446,23 @@
       const uncancelledItems = o.items.filter(i => !i.is_cancelled);
       const itemsCount = uncancelledItems.reduce((acc, i) => acc + i.quantity, 0);
 
+      const isServed = o.status === 'completed';
+      const statusBadge = isServed
+        ? `<span class="badge bg-success py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i>Food Served · Ready</span>`
+        : `<span class="badge bg-warning text-dark py-1 px-2"><i class="bi bi-fire me-1"></i>Kitchen: ${o.status.toUpperCase()}</span>`;
+
       return `
         <div class="card p-3 mb-2 order-select-item ${isSelected ? 'selected' : ''}" onclick='selectOrderById(${o.id})'>
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="badge bg-dark">${target}</span>
             <span class="fw-bold fs-6 text-dark">₹${parseFloat(o.grand_total).toFixed(2)}</span>
           </div>
-          <div class="d-flex justify-content-between align-items-center small text-muted">
+          <div class="d-flex justify-content-between align-items-center small text-muted mb-1">
             <span>${o.order_number} · ${itemsCount} items</span>
             <span>Batch #${o.current_batch}</span>
+          </div>
+          <div>
+            ${statusBadge}
           </div>
         </div>
       `;
@@ -339,6 +481,24 @@
 
     document.getElementById('no-order-selected-view').classList.add('d-none');
     document.getElementById('order-checkout-view').classList.remove('d-none');
+
+    // Status Banner
+    const statusBanner = document.getElementById('bill-order-status-banner');
+    if (order.status === 'completed') {
+      statusBanner.innerHTML = `
+        <div class="alert alert-success py-2 px-3 mb-3 small d-flex align-items-center gap-2 border-0 shadow-sm" style="background-color: #ecfdf5; color: #065f46; border-radius: 12px;">
+          <i class="bi bi-check-circle-fill fs-5 text-success"></i>
+          <div><b>Food Served & Ready:</b> Dishes prepared and served to ${order.table_number ? 'Table ' + order.table_number : 'customer'}. Ready to collect payment and print thermal receipt.</div>
+        </div>
+      `;
+    } else {
+      statusBanner.innerHTML = `
+        <div class="alert alert-warning py-2 px-3 mb-3 small d-flex align-items-center gap-2 border-0 shadow-sm" style="background-color: #fffbeb; color: #92400e; border-radius: 12px;">
+          <i class="bi bi-fire fs-5 text-warning"></i>
+          <div><b>Still in Kitchen:</b> This order is currently <b>${order.status.toUpperCase()}</b> in the kitchen and has not been marked as served yet.</div>
+        </div>
+      `;
+    }
 
     // Header info
     const targetTitle = order.table_number ? `Table ${order.table_number}` : `Takeaway (${order.customer_name || 'Counter'})`;

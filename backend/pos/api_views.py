@@ -363,8 +363,24 @@ def api_order_cancel_item(request):
 def api_active_orders(request):
     """
     Returns live active orders for staff tablet and billing counter.
+    Supports:
+      - served_only=1 or billing_only=1: Returns only food that has been marked as served (status='completed')
+      - status=<status>: Filters by specific status
+      - Default: Returns all active unpaid orders ('new', 'preparing', 'ready', 'completed')
     """
-    orders = Order.objects.filter(is_paid=False, status__in=['new', 'preparing', 'ready']).order_by('-created_at')
+    orders = Order.objects.filter(is_paid=False).exclude(status='cancelled')
+
+    served_only = request.GET.get('served_only') == '1' or request.GET.get('billing_only') == '1'
+    status_filter = request.GET.get('status')
+
+    if served_only:
+        orders = orders.filter(status='completed')
+    elif status_filter:
+        orders = orders.filter(status=status_filter)
+    else:
+        orders = orders.filter(status__in=['new', 'preparing', 'ready', 'completed'])
+
+    orders = orders.prefetch_related('items', 'table', 'customer').order_by('-created_at')
     result = []
     for ord in orders:
         items = []
@@ -388,6 +404,7 @@ def api_active_orders(request):
             'customer_name': ord.customer_name,
             'customer_phone': ord.customer_phone,
             'status': ord.status,
+            'is_served': ord.status == 'completed',
             'subtotal': str(ord.subtotal),
             'discount_amount': str(ord.discount_amount),
             'tax_amount': str(ord.tax_amount),

@@ -58,11 +58,11 @@ class DiningTable(models.Model):
         return f"Table {self.number} ({self.get_status_display()})"
 
     def get_active_order(self):
-        """Returns the currently active dine-in order for this table, if any."""
+        """Returns the currently active unpaid dine-in order for this table, if any."""
         return self.orders.filter(
             order_type='dine_in',
-            status__in=['new', 'preparing', 'ready']
-        ).first()
+            is_paid=False
+        ).exclude(status='cancelled').first()
 
 
 class Category(models.Model):

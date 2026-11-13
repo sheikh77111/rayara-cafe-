@@ -85,10 +85,57 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-CORS_ALLOW_ALL_ORIGINS = True if DEBUG else False
-CORS_ALLOWED_ORIGINS = [x.strip() for x in os.getenv('CORS_ALLOWED_ORIGINS','http://localhost:3000,http://127.0.0.1:3000').split(',') if x.strip()]
+
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
-REST_FRAMEWORK={'DEFAULT_AUTHENTICATION_CLASSES':['rest_framework.authentication.BasicAuthentication','rest_framework.authentication.SessionAuthentication'],'DEFAULT_PERMISSION_CLASSES':['rest_framework.permissions.AllowAny'],'DEFAULT_THROTTLE_CLASSES':['rest_framework.throttling.AnonRateThrottle'],'DEFAULT_THROTTLE_RATES':{'anon':'120/hour'}}
+CORS_ALLOWED_ORIGINS = [
+    x.strip() for x in os.getenv(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:3002,http://127.0.0.1:3003'
+    ).split(',') if x.strip()
+]
+
+# CSRF Trusted Origins (Allows frontend Next.js on any port e.g. 3000, 3001, 3002, 3003 or local LAN IP)
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://localhost:3003',
+    'http://localhost:3004',
+    'http://localhost:3005',
+    'http://localhost:8000',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:3002',
+    'http://127.0.0.1:3003',
+    'http://127.0.0.1:3004',
+    'http://127.0.0.1:3005',
+    'http://127.0.0.1:8000',
+]
+_env_csrf = os.getenv('CSRF_TRUSTED_ORIGINS', '')
+if _env_csrf:
+    CSRF_TRUSTED_ORIGINS.extend([x.strip() for x in _env_csrf.split(',') if x.strip()])
+
+# Dynamically trust local LAN IP for staff tablet and mobile dining QR scans
+import socket
+try:
+    _host_ip = socket.gethostbyname(socket.gethostname())
+    if _host_ip and _host_ip != '127.0.0.1':
+        for _p in (3000, 3001, 3002, 3003, 3004, 3005, 8000):
+            CSRF_TRUSTED_ORIGINS.append(f'http://{_host_ip}:{_p}')
+except Exception:
+    pass
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'config.authentication.CsrfExemptSessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
+    'DEFAULT_THROTTLE_CLASSES': ['rest_framework.throttling.AnonRateThrottle'],
+    'DEFAULT_THROTTLE_RATES': {'anon': '120/hour'}
+}
 
 # Resend Email Configuration
 RESEND_API_KEY = os.getenv('RESEND_API_KEY', '').strip()

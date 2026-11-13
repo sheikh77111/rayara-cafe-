@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Sum, Count
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -43,6 +43,7 @@ def get_customer(request):
     return Customer.objects.filter(session_token_hash=digest(token), is_active=True).first()
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def send_otp(request):
     raw_email = request.data.get('email', '') or request.data.get('phone_number', '')
@@ -95,6 +96,7 @@ def send_otp(request):
     })
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def verify_otp(request):
     raw_email = request.data.get('email', '') or request.data.get('phone_number', '')
@@ -164,6 +166,7 @@ def verify_otp(request):
     })
 
 @api_view(['GET'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def customer_me(request):
     customer = get_customer(request)
@@ -191,6 +194,7 @@ def customer_me(request):
     })
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def customer_logout(request):
     customer = get_customer(request)
@@ -200,17 +204,20 @@ def customer_logout(request):
     return Response({'success': True, 'message': 'Logged out successfully.'})
 
 @api_view(['GET'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def menu(request):
     cats = MenuCategory.objects.filter(active=True).order_by('sort_order')
     return Response(MenuCategorySerializer(cats, many=True).data)
 
 @api_view(['GET'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def games(request):
     return Response(list(Game.objects.filter(active=True).values('key', 'name')))
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def play(request):
     customer = get_customer(request)
@@ -331,6 +338,7 @@ def play(request):
     })
 
 @api_view(['GET'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def my_coupons(request):
     customer = get_customer(request)

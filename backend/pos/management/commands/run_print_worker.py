@@ -27,3 +27,4 @@ class Command(BaseCommand):
                 time.sleep(interval)
         except KeyboardInterrupt:
             self.stdout.write("Print worker stopped.")
+

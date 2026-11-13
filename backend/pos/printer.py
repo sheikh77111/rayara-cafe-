@@ -364,3 +364,4 @@ def process_pending_print_jobs(limit=10) -> int:
             if dispatch_print_job(job):
                 processed += 1
     return processed
+

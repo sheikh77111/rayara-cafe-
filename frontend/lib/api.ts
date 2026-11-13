@@ -102,3 +102,9 @@ export async function customerLogout() {
     clearCustomerSession();
   }
 }
+
+export async function getCustomerBills(email?: string) {
+  const query = email ? `?email=${encodeURIComponent(email)}` : '';
+  return request(`/customer/bills/${query}`, { method: 'GET' });
+}
+

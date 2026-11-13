@@ -13,6 +13,7 @@ urlpatterns = [
     re_path(r'^games/?$', views.games),
     re_path(r'^game/play/?$', views.play),
     re_path(r'^coupons/?$', views.my_coupons),
+    re_path(r'^customer/bills/?$', views.customer_bills if hasattr(views, 'customer_bills') else __import__('pos.api_views', fromlist=['api_customer_bills']).api_customer_bills),
 
     # Staff & Admin
     re_path(r'^staff/redeem/?$', views.redeem),

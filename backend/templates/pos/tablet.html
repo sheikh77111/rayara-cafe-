@@ -2,53 +2,714 @@
 
 {% block title %}Staff Tablet POS | Rayara Cafe{% endblock %}
 
+{% block extra_head %}
+<style>
+  .pos-container {
+    height: calc(100vh - 90px);
+    display: flex;
+    flex-direction: column;
+  }
+  .table-badge-btn {
+    border: 2px solid var(--rayara-border);
+    border-radius: 14px;
+    padding: 8px 14px;
+    min-width: 75px;
+    text-align: center;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #fff;
+  }
+  .table-badge-btn.available {
+    border-color: #2e7d32;
+    color: #2e7d32;
+  }
+  .table-badge-btn.occupied {
+    background-color: #fff3e0;
+    border-color: #e65100;
+    color: #b78103;
+  }
+  .table-badge-btn.selected {
+    background-color: var(--rayara-bronze) !important;
+    border-color: var(--rayara-amber) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(42, 24, 16, 0.35);
+  }
+  .cat-pill {
+    padding: 8px 18px;
+    border-radius: 25px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    border: 1px solid var(--rayara-border);
+    background: #fff;
+    color: #4a3b32;
+    transition: all 0.15s ease;
+  }
+  .cat-pill.active {
+    background: var(--rayara-bronze);
+    color: var(--rayara-amber-glow);
+    border-color: var(--rayara-bronze);
+    box-shadow: 0 2px 8px rgba(42, 24, 16, 0.25);
+  }
+  .food-card {
+    border: 1px solid var(--rayara-border);
+    border-radius: 16px;
+    background: #fff;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  .food-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(42, 24, 16, 0.08);
+  }
+  .food-card.unavailable {
+    opacity: 0.55;
+    filter: grayscale(80%);
+    pointer-events: none;
+  }
+  .food-card-img {
+    height: 110px;
+    object-fit: cover;
+    background: #ece3d4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8c7362;
+    font-size: 32px;
+  }
+  .cart-panel {
+    background: #ffffff;
+    border-left: 1px solid var(--rayara-border);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    box-shadow: -4px 0 20px rgba(42, 24, 16, 0.04);
+  }
+  .cart-items-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+  .cart-item-row {
+    background: var(--rayara-sand-card);
+    border: 1px solid var(--rayara-border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .qty-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--rayara-border);
+    background: #fff;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .qty-btn:hover {
+    background: var(--rayara-sand);
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid px-4">
-  <div class="d-flex align-items-center justify-content-between mb-4">
-    <div>
-      <h2 class="serif-brand fw-bold mb-1" style="color: var(--rayara-bronze);">STAFF TABLET POS</h2>
-      <p class="text-muted small mb-0">Select order type: Dine-in Table or Takeaway counter ticket.</p>
+<div class="container-fluid px-3 py-2 pos-container">
+  <!-- Top Bar: Order Type & Active Orders Toggle -->
+  <div class="row g-2 align-items-center mb-2">
+    <div class="col-auto">
+      <div class="btn-group" role="group">
+        <button type="button" class="btn btn-rayara-primary active" id="btn-mode-dine" onclick="setOrderType('dine_in')">
+          <i class="bi bi-cup-hot-fill me-1"></i> Dine-In
+        </button>
+        <button type="button" class="btn btn-outline-dark" id="btn-mode-takeaway" onclick="setOrderType('takeaway')">
+          <i class="bi bi-bag-check-fill me-1"></i> Takeaway
+        </button>
+      </div>
     </div>
-    <div>
-      <span class="badge bg-success py-2 px-3 rounded-pill">
-        <i class="bi bi-wifi me-1"></i> Kitchen Printer Online
-      </span>
+    <div class="col">
+      <!-- Dine-In Table Picker -->
+      <div id="table-picker-container" class="d-flex gap-2 overflow-x-auto pb-1">
+        <span class="text-muted small align-self-center me-1">Loading Tables...</span>
+      </div>
+      <!-- Takeaway Info Inputs -->
+      <div id="takeaway-info-container" class="row g-2 d-none">
+        <div class="col-md-4">
+          <input type="text" id="takeaway-name" class="form-control form-control-sm" placeholder="Customer Name (optional)">
+        </div>
+        <div class="col-md-4">
+          <input type="tel" id="takeaway-phone" class="form-control form-control-sm" placeholder="Customer Phone (optional)">
+        </div>
+        <div class="col-md-4">
+          <input type="text" id="takeaway-notes" class="form-control form-control-sm" placeholder="Parcel notes (e.g. Packing)">
+        </div>
+      </div>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="openActiveOrdersModal()">
+        <i class="bi bi-card-checklist me-1"></i> Active Orders (<span id="active-count-badge">0</span>)
+      </button>
     </div>
   </div>
 
-  <div class="row g-4">
-    <!-- Quick Actions -->
-    <div class="col-md-6 col-lg-4">
-      <div class="card card-rayara p-4 text-center h-100 hover-shadow cursor-pointer" onclick="location.href='#new-dine-in'">
-        <div class="p-3 bg-light rounded-circle mx-auto mb-3 text-warning" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
-          <i class="bi bi-cup-hot-fill fs-2"></i>
+  <!-- Main POS Grid: Products (col-8) & Cart (col-4) -->
+  <div class="row g-3 flex-grow-1 overflow-hidden">
+    <!-- Left: Menu Catalog -->
+    <div class="col-lg-8 col-xl-8 d-flex flex-direction-column flex-column h-100 overflow-hidden">
+      <!-- Search & Categories Bar -->
+      <div class="d-flex gap-2 mb-2 align-items-center">
+        <div class="input-group input-group-sm" style="max-width: 260px;">
+          <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" id="menu-search" class="form-control border-start-0" placeholder="Search item..." oninput="filterProducts()">
         </div>
-        <h4 class="fw-bold text-dark">Dine-In Order</h4>
-        <p class="text-muted small">Select an available table, add items and send to kitchen.</p>
-        <button class="btn btn-rayara-primary mt-auto">Open Table Grid</button>
+        <div id="category-pills" class="d-flex gap-2 overflow-x-auto py-1 flex-grow-1">
+          <span class="cat-pill active" onclick="selectCategory('all', this)">All Items</span>
+        </div>
+      </div>
+
+      <!-- Food Products Grid -->
+      <div class="flex-grow-1 overflow-y-auto pe-1" id="products-grid-container">
+        <div class="row g-3" id="products-row">
+          <!-- Dynamic product cards render here -->
+        </div>
       </div>
     </div>
 
-    <div class="col-md-6 col-lg-4">
-      <div class="card card-rayara p-4 text-center h-100 hover-shadow cursor-pointer" onclick="location.href='#new-takeaway'">
-        <div class="p-3 bg-light rounded-circle mx-auto mb-3 text-warning" style="width: 70px; height: 70px; display: flex; align-items: center; justify-content: center;">
-          <i class="bi bi-bag-check-fill fs-2"></i>
+    <!-- Right: Cart & Send to Kitchen -->
+    <div class="col-lg-4 col-xl-4 h-100">
+      <div class="cart-panel p-3">
+        <!-- Cart Target Header -->
+        <div class="d-flex justify-content-between align-items-center pb-2 border-bottom mb-2">
+          <div>
+            <h6 class="fw-bold mb-0" id="cart-target-title" style="color: var(--rayara-bronze);">
+              <i class="bi bi-cup-hot me-1"></i> Table T1
+            </h6>
+            <small class="text-muted" id="cart-server-name">Waiter: {{ user.username }}</small>
+          </div>
+          <button class="btn btn-sm btn-outline-danger py-0 px-2 rounded-pill" onclick="clearCart()" title="Clear cart">
+            <i class="bi bi-trash"></i> Clear
+          </button>
         </div>
-        <h4 class="fw-bold text-dark">Takeaway Order</h4>
-        <p class="text-muted small">Create quick parcel order with customer name and phone.</p>
-        <button class="btn btn-rayara-primary mt-auto">New Takeaway</button>
-      </div>
-    </div>
 
-    <div class="col-md-12 col-lg-4">
-      <div class="card card-rayara p-4 h-100">
-        <h5 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history me-2"></i>Active Orders</h5>
-        <div id="active-orders-list" class="text-muted small">
-          <p>No active pending orders. Tap <b>Dine-In</b> or <b>Takeaway</b> to create an order.</p>
+        <!-- Cart Items List -->
+        <div class="cart-items-scroll" id="cart-items-container">
+          <div class="text-center text-muted py-5">
+            <i class="bi bi-cart3 fs-1 text-secondary opacity-50 mb-2 d-block"></i>
+            <p class="small">Cart is empty.<br>Tap any food item to add.</p>
+          </div>
+        </div>
+
+        <!-- Cart Summary Footer -->
+        <div class="border-top pt-2 mt-auto">
+          <div class="d-flex justify-content-between text-muted small mb-1">
+            <span>Subtotal:</span>
+            <span class="fw-bold text-dark" id="cart-subtotal">₹0.00</span>
+          </div>
+          <div class="d-flex justify-content-between text-muted small mb-2">
+            <span>Estimated GST (5%):</span>
+            <span id="cart-tax">₹0.00</span>
+          </div>
+          <div class="d-flex justify-content-between fw-bold fs-5 mb-3" style="color: var(--rayara-bronze);">
+            <span>Payable:</span>
+            <span id="cart-total">₹0.00</span>
+          </div>
+
+          <!-- SEND TO KITCHEN BUTTON -->
+          <button class="btn btn-warning w-100 py-3 fw-bold fs-6 rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2"
+                  id="btn-send-kitchen" onclick="submitOrderToKitchen()" style="background-color: #e59a38; border: none; color: #1c100a;">
+            <i class="bi bi-fire fs-5"></i>
+            <span>SEND TO KITCHEN (KOT)</span>
+          </button>
         </div>
       </div>
     </div>
   </div>
 </div>
-{% endblock %}
 
+<!-- Active Orders Modal -->
+<div class="modal fade" id="activeOrdersModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Active Restaurant Orders</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Order #</th>
+                <th>Target</th>
+                <th>Items (Batch)</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="active-orders-tbody">
+              <tr><td colspan="6" class="text-center py-4 text-muted">Loading orders...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Special Instruction Modal -->
+<div class="modal fade" id="noteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title fw-bold" id="note-modal-title">Special Instructions</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="note-input" class="form-control" placeholder="e.g. Extra spicy, No mayo, Garlic dip on side">
+        <div class="d-flex gap-2 flex-wrap mt-2">
+          <span class="badge bg-light text-dark border cursor-pointer" onclick="appendQuickNote('Extra Spicy')">Extra Spicy</span>
+          <span class="badge bg-light text-dark border cursor-pointer" onclick="appendQuickNote('No Onions')">No Onions</span>
+          <span class="badge bg-light text-dark border cursor-pointer" onclick="appendQuickNote('Less Mayo')">Less Mayo</span>
+          <span class="badge bg-light text-dark border cursor-pointer" onclick="appendQuickNote('Well Done')">Well Done</span>
+          <span class="badge bg-light text-dark border cursor-pointer" onclick="appendQuickNote('Parcel / Pack')">Parcel</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-rayara-primary btn-sm" onclick="saveItemNote()">Save Note</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let state = {
+    orderType: 'dine_in',
+    selectedTable: 'T1',
+    existingOrderId: null,
+    menuData: [],
+    categories: [],
+    selectedCategory: 'all',
+    searchQuery: '',
+    cart: {}, // productId -> { id, name, price, qty, notes }
+    tables: [],
+    activeEditingItemId: null
+  };
+
+  const CSRF_TOKEN = '{{ csrf_token }}';
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadTables();
+    loadMenu();
+    loadActiveOrders();
+    // Auto-refresh active tables every 15s
+    setInterval(loadTables, 15000);
+  });
+
+  function setOrderType(type) {
+    state.orderType = type;
+    const btnDine = document.getElementById('btn-mode-dine');
+    const btnTake = document.getElementById('btn-mode-takeaway');
+    const tableCont = document.getElementById('table-picker-container');
+    const takeCont = document.getElementById('takeaway-info-container');
+
+    if (type === 'dine_in') {
+      btnDine.className = 'btn btn-rayara-primary active';
+      btnTake.className = 'btn btn-outline-dark';
+      tableCont.classList.remove('d-none');
+      takeCont.classList.add('d-none');
+      updateCartTargetTitle(`Table ${state.selectedTable}`);
+    } else {
+      btnTake.className = 'btn btn-rayara-primary active';
+      btnDine.className = 'btn btn-outline-dark';
+      tableCont.classList.add('d-none');
+      takeCont.classList.remove('d-none');
+      updateCartTargetTitle('Takeaway Order');
+    }
+  }
+
+  function updateCartTargetTitle(title) {
+    const el = document.getElementById('cart-target-title');
+    const icon = state.orderType === 'dine_in' ? 'bi-cup-hot' : 'bi-bag-check';
+    el.innerHTML = `<i class="bi ${icon} me-1"></i> ${title}`;
+  }
+
+  async function loadTables() {
+    try {
+      const res = await fetch('/pos/api/tables/');
+      if (!res.ok) return;
+      state.tables = await res.json();
+      renderTablePicker();
+    } catch (e) {
+      console.error("Error loading tables:", e);
+    }
+  }
+
+  function renderTablePicker() {
+    const cont = document.getElementById('table-picker-container');
+    if (!state.tables || state.tables.length === 0) return;
+
+    cont.innerHTML = state.tables.map(t => {
+      const isSelected = state.selectedTable === t.number && state.orderType === 'dine_in';
+      const statusClass = t.status === 'occupied' ? 'occupied' : 'available';
+      const selClass = isSelected ? 'selected' : '';
+      const orderInfo = t.active_order ? `· ₹${parseFloat(t.active_order.grand_total).toFixed(0)}` : '';
+
+      return `
+        <div class="table-badge-btn ${statusClass} ${selClass}" onclick="selectTable('${t.number}', ${t.active_order ? t.active_order.id : null})">
+          <div class="small fw-bold">${t.number}</div>
+          <div style="font-size: 10px;">${t.status === 'occupied' ? 'Occupied' : 'Open'} ${orderInfo}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function selectTable(num, existingOrderId) {
+    state.selectedTable = num;
+    state.existingOrderId = existingOrderId;
+    setOrderType('dine_in');
+    renderTablePicker();
+
+    if (existingOrderId) {
+      updateCartTargetTitle(`Table ${num} (Add-On Order)`);
+    } else {
+      updateCartTargetTitle(`Table ${num} (New Order)`);
+    }
+  }
+
+  async function loadMenu() {
+    try {
+      const res = await fetch('/pos/api/menu/');
+      if (!res.ok) return;
+      state.menuData = await res.json();
+      renderCategoryPills();
+      renderProducts();
+    } catch (e) {
+      console.error("Error loading menu:", e);
+    }
+  }
+
+  function renderCategoryPills() {
+    const cont = document.getElementById('category-pills');
+    let html = `<span class="cat-pill ${state.selectedCategory === 'all' ? 'active' : ''}" onclick="selectCategory('all', this)">All Items</span>`;
+
+    state.menuData.forEach(c => {
+      html += `<span class="cat-pill ${state.selectedCategory == c.id ? 'active' : ''}" onclick="selectCategory(${c.id}, this)">${c.name}</span>`;
+    });
+    cont.innerHTML = html;
+  }
+
+  function selectCategory(catId, btn) {
+    state.selectedCategory = catId;
+    document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    renderProducts();
+  }
+
+  function filterProducts() {
+    state.searchQuery = document.getElementById('menu-search').value.toLowerCase().trim();
+    renderProducts();
+  }
+
+  function renderProducts() {
+    const row = document.getElementById('products-row');
+    let allProducts = [];
+
+    state.menuData.forEach(cat => {
+      if (state.selectedCategory === 'all' || state.selectedCategory == cat.id) {
+        cat.products.forEach(p => allProducts.push(p));
+      }
+    });
+
+    if (state.searchQuery) {
+      allProducts = allProducts.filter(p =>
+        p.name.toLowerCase().includes(state.searchQuery) ||
+        p.description.toLowerCase().includes(state.searchQuery)
+      );
+    }
+
+    if (allProducts.length === 0) {
+      row.innerHTML = `<div class="col-12 text-center text-muted py-5"><p>No items found.</p></div>`;
+      return;
+    }
+
+    row.innerHTML = allProducts.map(p => {
+      const price = parseFloat(p.price).toFixed(2);
+      const isAvailable = p.is_available;
+      const imgHtml = p.image_url
+        ? `<img src="${p.image_url}" class="food-card-img w-100" alt="${p.name}">`
+        : `<div class="food-card-img"><i class="bi bi-egg-fried"></i></div>`;
+
+      return `
+        <div class="col-sm-6 col-md-4 col-xl-3">
+          <div class="food-card ${!isAvailable ? 'unavailable' : ''}">
+            ${imgHtml}
+            <div class="p-2 d-flex flex-column flex-grow-1">
+              <span class="text-muted" style="font-size: 11px;">${p.category_name}</span>
+              <h6 class="fw-bold mb-1 text-dark text-truncate" title="${p.name}">${p.name}</h6>
+              <div class="d-flex justify-content-between align-items-center mt-auto pt-2">
+                <span class="fw-bold" style="color: var(--rayara-bronze);">₹${price}</span>
+                ${isAvailable
+                  ? `<button class="btn btn-sm btn-rayara-primary py-1 px-2" onclick="addToCart(${p.id}, '${escapeHtml(p.name)}', ${p.price})">
+                       <i class="bi bi-plus-lg"></i> Add
+                     </button>`
+                  : `<span class="badge bg-secondary">Out of Stock</span>`
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function addToCart(id, name, price) {
+    if (!state.cart[id]) {
+      state.cart[id] = { id, name, price: parseFloat(price), qty: 1, notes: '' };
+    } else {
+      state.cart[id].qty += 1;
+    }
+    renderCart();
+  }
+
+  function changeQty(id, delta) {
+    if (!state.cart[id]) return;
+    state.cart[id].qty += delta;
+    if (state.cart[id].qty <= 0) {
+      delete state.cart[id];
+    }
+    renderCart();
+  }
+
+  function removeFromCart(id) {
+    delete state.cart[id];
+    renderCart();
+  }
+
+  function clearCart() {
+    state.cart = {};
+    renderCart();
+  }
+
+  function openNoteModal(id) {
+    state.activeEditingItemId = id;
+    const it = state.cart[id];
+    document.getElementById('note-modal-title').innerText = `Notes for ${it.name}`;
+    document.getElementById('note-input').value = it.notes || '';
+    const modal = new bootstrap.Modal(document.getElementById('noteModal'));
+    modal.show();
+  }
+
+  function appendQuickNote(txt) {
+    const inp = document.getElementById('note-input');
+    inp.value = inp.value ? `${inp.value}, ${txt}` : txt;
+  }
+
+  function saveItemNote() {
+    if (state.activeEditingItemId && state.cart[state.activeEditingItemId]) {
+      state.cart[state.activeEditingItemId].notes = document.getElementById('note-input').value.trim();
+    }
+    bootstrap.Modal.getInstance(document.getElementById('noteModal')).hide();
+    renderCart();
+  }
+
+  function renderCart() {
+    const cont = document.getElementById('cart-items-container');
+    const items = Object.values(state.cart);
+
+    if (items.length === 0) {
+      cont.innerHTML = `
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-cart3 fs-1 text-secondary opacity-50 mb-2 d-block"></i>
+          <p class="small">Cart is empty.<br>Tap any food item to add.</p>
+        </div>
+      `;
+      document.getElementById('cart-subtotal').innerText = '₹0.00';
+      document.getElementById('cart-tax').innerText = '₹0.00';
+      document.getElementById('cart-total').innerText = '₹0.00';
+      return;
+    }
+
+    let subtotal = 0;
+    cont.innerHTML = items.map(it => {
+      const lineTotal = (it.price * it.qty).toFixed(2);
+      subtotal += (it.price * it.qty);
+
+      return `
+        <div class="cart-item-row">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="fw-semibold text-dark text-truncate" style="max-width: 170px;">${it.name}</div>
+            <div class="fw-bold text-dark">₹${lineTotal}</div>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <div class="d-flex align-items-center gap-2">
+              <span class="qty-btn" onclick="changeQty(${it.id}, -1)">-</span>
+              <span class="fw-bold px-1">${it.qty}</span>
+              <span class="qty-btn" onclick="changeQty(${it.id}, 1)">+</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn btn-sm btn-link p-0 text-decoration-none text-muted" onclick="openNoteModal(${it.id})" title="Special instruction">
+                <i class="bi bi-chat-text"></i> ${it.notes ? '<span class="badge bg-warning text-dark">Note</span>' : '<span class="small">Note</span>'}
+              </button>
+              <button class="btn btn-sm btn-link p-0 text-danger" onclick="removeFromCart(${it.id})">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </div>
+          </div>
+          ${it.notes ? `<div class="small text-muted mt-1 fst-italic">Note: ${it.notes}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    const tax = subtotal * 0.05; // 5% GST
+    const total = subtotal + tax;
+
+    document.getElementById('cart-subtotal').innerText = `₹${subtotal.toFixed(2)}`;
+    document.getElementById('cart-tax').innerText = `₹${tax.toFixed(2)}`;
+    document.getElementById('cart-total').innerText = `₹${total.toFixed(2)}`;
+  }
+
+  async function submitOrderToKitchen() {
+    const items = Object.values(state.cart);
+    if (items.length === 0) {
+      alert("Please add at least one item to the order before sending to kitchen.");
+      return;
+    }
+
+    const btn = document.getElementById('btn-send-kitchen');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> Printing KOT Ticket...`;
+
+    try {
+      let endpoint = '/pos/api/orders/create/';
+      let payload = {
+        order_type: state.orderType,
+        items: items.map(it => ({
+          product_id: it.id,
+          quantity: it.qty,
+          special_instructions: it.notes
+        }))
+      };
+
+      if (state.orderType === 'dine_in') {
+        payload.table_number = state.selectedTable;
+        // If table is occupied and has existing order, route to add-items API!
+        if (state.existingOrderId) {
+          endpoint = '/pos/api/orders/add-items/';
+          payload = {
+            order_id: state.existingOrderId,
+            items: payload.items
+          };
+        }
+      } else {
+        payload.customer_name = document.getElementById('takeaway-name').value.trim();
+        payload.customer_phone = document.getElementById('takeaway-phone').value.trim();
+        payload.takeaway_notes = document.getElementById('takeaway-notes').value.trim();
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.table_occupied && data.existing_order_id) {
+          if (confirm(`${data.error}\nWould you like to add these items to active order #${data.existing_order_id}?`)) {
+            state.existingOrderId = data.existing_order_id;
+            submitOrderToKitchen();
+            return;
+          }
+        } else {
+          alert("Error: " + (data.error || "Failed to submit order."));
+        }
+      } else {
+        alert(`Success! Order #${data.order_number} sent to Kitchen Thermal Printer!`);
+        clearCart();
+        loadTables();
+        loadActiveOrders();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Network error: Could not reach POS server.");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="bi bi-fire fs-5"></i> <span>SEND TO KITCHEN (KOT)</span>`;
+    }
+  }
+
+  async function loadActiveOrders() {
+    try {
+      const res = await fetch('/pos/api/orders/active/');
+      if (!res.ok) return;
+      const orders = await res.json();
+      document.getElementById('active-count-badge').innerText = orders.length;
+
+      const tbody = document.getElementById('active-orders-tbody');
+      if (orders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No active orders right now.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = orders.map(o => {
+        const target = o.table_number ? `Table ${o.table_number}` : `Takeaway (${o.customer_name || 'Counter'})`;
+        const itemsList = o.items.filter(i => !i.is_cancelled).map(i => `${i.quantity}x ${i.name}`).join(', ');
+
+        return `
+          <tr>
+            <td><strong class="text-dark">${o.order_number}</strong></td>
+            <td><span class="badge bg-light text-dark border">${target}</span></td>
+            <td><small class="text-muted text-truncate d-inline-block" style="max-width: 250px;">${itemsList} (Batch #${o.current_batch})</small></td>
+            <td><strong>₹${parseFloat(o.grand_total).toFixed(2)}</strong></td>
+            <td><span class="badge bg-warning text-dark">${o.status.toUpperCase()}</span></td>
+            <td>
+              <button class="btn btn-sm btn-outline-primary py-0" onclick="selectExistingOrder(${o.id}, '${o.table_number || ''}')">
+                Add Items
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function selectExistingOrder(orderId, tableNum) {
+    bootstrap.Modal.getInstance(document.getElementById('activeOrdersModal')).hide();
+    if (tableNum) {
+      selectTable(tableNum, orderId);
+    } else {
+      state.existingOrderId = orderId;
+      setOrderType('takeaway');
+      updateCartTargetTitle(`Takeaway (Add-on Order #${orderId})`);
+    }
+  }
+
+  function openActiveOrdersModal() {
+    loadActiveOrders();
+    new bootstrap.Modal(document.getElementById('activeOrdersModal')).show();
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+  }
+</script>
+{% endblock %}

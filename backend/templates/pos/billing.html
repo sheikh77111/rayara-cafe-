@@ -1,47 +1,577 @@
 {% extends 'pos/base.html' %}
 
-{% block title %}Billing Counter | Rayara Cafe POS{% endblock %}
+{% block title %}Billing Counter & Settlement | Rayara Cafe POS{% endblock %}
+
+{% block extra_head %}
+<style>
+  .billing-card {
+    background: #fff;
+    border: 1px solid var(--rayara-border);
+    border-radius: 18px;
+    box-shadow: 0 4px 20px rgba(42, 24, 16, 0.05);
+  }
+  .order-select-item {
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s ease;
+  }
+  .order-select-item:hover {
+    background-color: var(--rayara-sand-card);
+  }
+  .order-select-item.selected {
+    border-color: var(--rayara-amber);
+    background-color: #fff9f0;
+  }
+  .method-tab {
+    cursor: pointer;
+    border: 2px solid var(--rayara-border);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    font-weight: 700;
+    transition: all 0.15s ease;
+    background: #fff;
+  }
+  .method-tab.active {
+    background: var(--rayara-bronze);
+    border-color: var(--rayara-bronze);
+    color: var(--rayara-amber-glow);
+    box-shadow: 0 4px 12px rgba(42, 24, 16, 0.25);
+  }
+  .receipt-slip {
+    background: #fff;
+    border: 1px dashed #bba895;
+    padding: 16px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #1a1a1a;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4">
-  <div class="d-flex align-items-center justify-content-between mb-4">
+<div class="container-fluid px-3 py-3">
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
-      <h2 class="serif-brand fw-bold mb-1" style="color: var(--rayara-bronze);">BILLING COUNTER</h2>
-      <p class="text-muted small mb-0">Select ready order to calculate taxes, apply discounts and print receipt.</p>
+      <h3 class="serif-brand fw-bold mb-1" style="color: var(--rayara-bronze);">BILLING COUNTER & CHECKOUT</h3>
+      <p class="text-muted small mb-0">Validate customer rewards & coupons, accept payments, and issue thermal receipts.</p>
     </div>
-    <div>
+    <div class="d-flex align-items-center gap-2">
       <span class="badge bg-success py-2 px-3 rounded-pill">
-        <i class="bi bi-printer-fill me-1"></i> Counter Printer Connected
+        <i class="bi bi-printer-fill me-1"></i> TVS Billing Spooler Ready
       </span>
+      <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="loadBillingOrders()">
+        <i class="bi bi-arrow-clockwise me-1"></i> Refresh Orders
+      </button>
     </div>
   </div>
 
-  <div class="card card-rayara p-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h5 class="fw-bold mb-0">Orders Awaiting Payment</h5>
-      <input type="text" class="form-control form-control-sm w-auto" placeholder="Search order / table...">
+  <div class="row g-3">
+    <!-- Left: Unpaid Orders Queue (col-5) -->
+    <div class="col-lg-5">
+      <div class="billing-card p-3 h-100 d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-receipt me-1"></i> Unpaid Active Orders (<span id="unpaid-count">0</span>)</h6>
+          <input type="text" id="order-search" class="form-control form-control-sm w-50" placeholder="Filter table or order..." oninput="filterOrders()">
+        </div>
+
+        <div class="flex-grow-1 overflow-y-auto pe-1" id="orders-list-container" style="max-height: calc(100vh - 220px);">
+          <div class="text-center text-muted py-5">
+            <span class="spinner-border spinner-border-sm me-2"></span> Loading active orders...
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="table-responsive">
-      <table class="table table-hover align-middle">
-        <thead class="table-light">
-          <tr>
-            <th>Order #</th>
-            <th>Type / Table</th>
-            <th>Items</th>
-            <th>Time</th>
-            <th>Status</th>
-            <th>Total Amount</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="billing-orders-tbody">
-          <tr>
-            <td colspan="7" class="text-center py-4 text-muted">No pending unpaid orders found.</td>
-          </tr>
-        </tbody>
-      </table>
+
+    <!-- Right: Bill Settlement & Customer Coupon Panel (col-7) -->
+    <div class="col-lg-7">
+      <div class="billing-card p-4 h-100" id="settlement-panel">
+        <div class="text-center text-muted py-5" id="no-order-selected-view">
+          <i class="bi bi-cursor fs-1 text-secondary opacity-50 mb-3 d-block"></i>
+          <h5>No Order Selected</h5>
+          <p class="small">Click on any active order from the left list to review bill, apply customer rewards, and take payment.</p>
+        </div>
+
+        <div id="order-checkout-view" class="d-none">
+          <!-- Active Order Header -->
+          <div class="d-flex justify-content-between align-items-center pb-3 border-bottom mb-3">
+            <div>
+              <span class="badge bg-warning text-dark px-2 py-1 mb-1" id="bill-order-type-badge">Dine-In</span>
+              <h4 class="fw-bold mb-0 serif-brand" id="bill-order-title" style="color: var(--rayara-bronze);">Table T1</h4>
+              <small class="text-muted" id="bill-order-number">Order #D-261113-001</small>
+            </div>
+            <div class="text-end">
+              <span class="text-muted small d-block">Time Elapsed:</span>
+              <span class="fw-bold text-dark" id="bill-order-time">--</span>
+            </div>
+          </div>
+
+          <!-- Items Breakdown -->
+          <div class="table-responsive mb-3 border rounded-3 p-2 bg-light">
+            <table class="table table-sm table-borderless align-middle mb-0">
+              <thead>
+                <tr class="text-muted small border-bottom">
+                  <th>Item</th>
+                  <th class="text-center">Qty</th>
+                  <th class="text-end">Price</th>
+                  <th class="text-end">Total</th>
+                  <th class="text-center">Cancel</th>
+                </tr>
+              </thead>
+              <tbody id="bill-items-tbody">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Customer Coupon & Rewards Section -->
+          <div class="card p-3 mb-3 border-warning" style="background-color: #fffdf9;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold small text-dark"><i class="bi bi-tag-fill text-warning me-1"></i> Apply Customer Coupon / Reward</span>
+              <span class="badge bg-light text-muted border">20-Slice Play & Win</span>
+            </div>
+            <div class="input-group input-group-sm mb-2">
+              <input type="text" id="coupon-code-input" class="form-control" placeholder="Enter coupon (e.g. RAYARA20X8) or Customer Phone / Email">
+              <button class="btn btn-warning text-dark fw-bold px-3" type="button" id="btn-validate-coupon" onclick="validateCustomerCoupon()">
+                <i class="bi bi-patch-check me-1"></i> Validate
+              </button>
+            </div>
+            <div id="coupon-feedback" class="small"></div>
+          </div>
+
+          <!-- Bill Calculation Summary -->
+          <div class="border rounded-3 p-3 mb-3 bg-white">
+            <div class="d-flex justify-content-between text-muted small mb-1">
+              <span>Subtotal:</span>
+              <span class="fw-bold text-dark" id="calc-subtotal">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between text-success small mb-1 d-none" id="calc-discount-row">
+              <span id="calc-discount-label">Customer Coupon Discount:</span>
+              <span class="fw-bold" id="calc-discount-val">-₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between text-muted small mb-1">
+              <span>CGST (2.5%):</span>
+              <span id="calc-cgst">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between text-muted small mb-2">
+              <span>SGST (2.5%):</span>
+              <span id="calc-sgst">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between fw-bold fs-4 pt-2 border-top" style="color: var(--rayara-bronze);">
+              <span>Final Bill:</span>
+              <span id="calc-grand-total">₹0.00</span>
+            </div>
+          </div>
+
+          <!-- Payment Method Selector -->
+          <div class="mb-3">
+            <label class="form-label fw-bold small text-dark mb-2">Select Payment Method</label>
+            <div class="row g-2">
+              <div class="col-4">
+                <div class="method-tab active" id="pay-mode-cash" onclick="setPaymentMethod('cash')">
+                  <i class="bi bi-cash-stack fs-4 d-block mb-1"></i> Cash
+                </div>
+              </div>
+              <div class="col-4">
+                <div class="method-tab" id="pay-mode-upi" onclick="setPaymentMethod('upi')">
+                  <i class="bi bi-qr-code-scan fs-4 d-block mb-1"></i> UPI / QR
+                </div>
+              </div>
+              <div class="col-4">
+                <div class="method-tab" id="pay-mode-card" onclick="setPaymentMethod('card')">
+                  <i class="bi bi-credit-card fs-4 d-block mb-1"></i> Card
+                </div>
+              </div>
+            </div>
+
+            <!-- UPI / Reference details -->
+            <div class="mt-2 d-none" id="reference-input-row">
+              <input type="text" id="pay-reference-input" class="form-control form-control-sm" placeholder="Enter UPI UTR Number or Card Transaction Ref (optional)">
+            </div>
+          </div>
+
+          <!-- Customer Linking (For digital bills) -->
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <input type="tel" id="customer-phone-input" class="form-control form-control-sm" placeholder="Customer Mobile (for digital bill)">
+            </div>
+            <div class="col-md-6">
+              <input type="email" id="customer-email-input" class="form-control form-control-sm" placeholder="Customer Email (optional)">
+            </div>
+          </div>
+
+          <!-- Settle & Print Button -->
+          <button class="btn btn-warning w-100 py-3 fw-bold fs-6 rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2"
+                  id="btn-settle-bill" onclick="settleAndPrintBill()" style="background-color: #e59a38; border: none; color: #1c100a;">
+            <i class="bi bi-printer-fill fs-5"></i>
+            <span>COMPLETE PAYMENT & PRINT RECEIPT</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
-{% endblock %}
 
+<!-- Receipt Modal -->
+<div class="modal fade" id="receiptModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h6 class="modal-title"><i class="bi bi-check-circle-fill text-success me-2"></i>Payment Settled & Receipt Printed</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3 bg-light">
+        <div class="receipt-slip" id="modal-receipt-text">
+          <!-- Raw receipt preview text -->
+        </div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-outline-dark btn-sm" onclick="reprintCurrentBill()">
+          <i class="bi bi-printer me-1"></i> Reprint Bill
+        </button>
+        <button type="button" class="btn btn-rayara-primary btn-sm" data-bs-dismiss="modal">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let billingState = {
+    orders: [],
+    selectedOrder: null,
+    paymentMethod: 'cash',
+    appliedCoupon: null,
+    lastSettledReceipt: null
+  };
+
+  const CSRF_TOKEN = '{{ csrf_token }}';
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadBillingOrders();
+    setInterval(loadBillingOrders, 10000);
+  });
+
+  async function loadBillingOrders() {
+    try {
+      const res = await fetch('/pos/api/orders/active/');
+      if (!res.ok) return;
+      billingState.orders = await res.json();
+      document.getElementById('unpaid-count').innerText = billingState.orders.length;
+      renderOrdersList();
+
+      // If selected order was updated, refresh details
+      if (billingState.selectedOrder) {
+        const updated = billingState.orders.find(o => o.id === billingState.selectedOrder.id);
+        if (updated) {
+          selectOrderForBilling(updated);
+        } else {
+          // Order was paid or cancelled
+          document.getElementById('order-checkout-view').classList.add('d-none');
+          document.getElementById('no-order-selected-view').classList.remove('d-none');
+          billingState.selectedOrder = null;
+        }
+      }
+    } catch (e) {
+      console.error("Error loading billing orders:", e);
+    }
+  }
+
+  function filterOrders() {
+    renderOrdersList();
+  }
+
+  function renderOrdersList() {
+    const cont = document.getElementById('orders-list-container');
+    const query = document.getElementById('order-search').value.toLowerCase().trim();
+    let list = billingState.orders;
+
+    if (query) {
+      list = list.filter(o =>
+        o.order_number.toLowerCase().includes(query) ||
+        (o.table_number && o.table_number.toLowerCase().includes(query)) ||
+        (o.customer_name && o.customer_name.toLowerCase().includes(query)) ||
+        (o.customer_phone && o.customer_phone.includes(query))
+      );
+    }
+
+    if (list.length === 0) {
+      cont.innerHTML = `<div class="text-center text-muted py-5"><p class="small">No pending orders to settle.</p></div>`;
+      return;
+    }
+
+    cont.innerHTML = list.map(o => {
+      const isSelected = billingState.selectedOrder && billingState.selectedOrder.id === o.id;
+      const target = o.table_number ? `Table ${o.table_number}` : `Takeaway (${o.customer_name || 'Counter'})`;
+      const uncancelledItems = o.items.filter(i => !i.is_cancelled);
+      const itemsCount = uncancelledItems.reduce((acc, i) => acc + i.quantity, 0);
+
+      return `
+        <div class="card p-3 mb-2 order-select-item ${isSelected ? 'selected' : ''}" onclick='selectOrderById(${o.id})'>
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="badge bg-dark">${target}</span>
+            <span class="fw-bold fs-6 text-dark">₹${parseFloat(o.grand_total).toFixed(2)}</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center small text-muted">
+            <span>${o.order_number} · ${itemsCount} items</span>
+            <span>Batch #${o.current_batch}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function selectOrderById(id) {
+    const o = billingState.orders.find(x => x.id === id);
+    if (o) selectOrderForBilling(o);
+  }
+
+  function selectOrderForBilling(order) {
+    billingState.selectedOrder = order;
+    billingState.appliedCoupon = null; // reset coupon when switching orders
+    renderOrdersList();
+
+    document.getElementById('no-order-selected-view').classList.add('d-none');
+    document.getElementById('order-checkout-view').classList.remove('d-none');
+
+    // Header info
+    const targetTitle = order.table_number ? `Table ${order.table_number}` : `Takeaway (${order.customer_name || 'Counter'})`;
+    document.getElementById('bill-order-title').innerText = targetTitle;
+    document.getElementById('bill-order-number').innerText = `Order #${order.order_number}`;
+    document.getElementById('bill-order-type-badge').innerText = order.order_type === 'dine_in' ? 'Dine-In' : 'Takeaway';
+
+    const createdTime = new Date(order.created_at);
+    document.getElementById('bill-order-time').innerText = createdTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Fill customer inputs if available
+    document.getElementById('customer-phone-input').value = order.customer_phone || '';
+    document.getElementById('customer-email-input').value = '';
+    document.getElementById('coupon-code-input').value = '';
+    document.getElementById('coupon-feedback').innerHTML = '';
+    document.getElementById('calc-discount-row').classList.add('d-none');
+
+    renderBillItems(order);
+    calculateBillTotals();
+  }
+
+  function renderBillItems(order) {
+    const tbody = document.getElementById('bill-items-tbody');
+    tbody.innerHTML = order.items.map(it => {
+      const isCancelled = it.is_cancelled;
+      return `
+        <tr class="${isCancelled ? 'text-muted text-decoration-line-through' : ''}">
+          <td>
+            <div class="fw-semibold text-dark">${it.name}</div>
+            ${it.special_instructions ? `<small class="text-muted d-block fst-italic">Note: ${it.special_instructions}</small>` : ''}
+            ${isCancelled ? `<span class="badge bg-danger">Cancelled</span>` : ''}
+          </td>
+          <td class="text-center">${it.quantity}</td>
+          <td class="text-end">₹${parseFloat(it.unit_price).toFixed(2)}</td>
+          <td class="text-end fw-bold">₹${parseFloat(it.line_total).toFixed(2)}</td>
+          <td class="text-center">
+            ${!isCancelled
+              ? `<button class="btn btn-sm btn-link text-danger p-0" onclick="cancelOrderItem(${it.id})" title="Cancel item">
+                   <i class="bi bi-x-circle"></i>
+                 </button>`
+              : '-'
+            }
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  async function cancelOrderItem(itemId) {
+    const reason = prompt("Enter reason for cancelling this item:", "Customer changed order");
+    if (!reason) return;
+
+    try {
+      const res = await fetch('/pos/api/orders/cancel-item/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+        body: JSON.stringify({ item_id: itemId, reason })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to cancel item.");
+      } else {
+        alert(data.message);
+        loadBillingOrders();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function validateCustomerCoupon() {
+    if (!billingState.selectedOrder) return;
+    const code = document.getElementById('coupon-code-input').value.trim();
+    const phone = document.getElementById('customer-phone-input').value.trim();
+    const email = document.getElementById('customer-email-input').value.trim();
+
+    if (!code && !phone && !email) {
+      alert("Please enter a Coupon Code (e.g. RAYARA20X8) or Customer Phone / Email.");
+      return;
+    }
+
+    const btn = document.getElementById('btn-validate-coupon');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Checking...`;
+
+    try {
+      const res = await fetch('/pos/api/billing/validate-coupon/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+        body: JSON.stringify({
+          order_id: billingState.selectedOrder.id,
+          coupon_code: code,
+          customer_phone: phone,
+          customer_email: email
+        })
+      });
+
+      const data = await res.json();
+      const fb = document.getElementById('coupon-feedback');
+
+      if (!res.ok || !data.valid) {
+        billingState.appliedCoupon = null;
+        fb.innerHTML = `<span class="text-danger fw-bold"><i class="bi bi-x-circle me-1"></i> ${data.error || 'Invalid Coupon'}</span>`;
+        document.getElementById('calc-discount-row').classList.add('d-none');
+      } else {
+        billingState.appliedCoupon = data;
+        fb.innerHTML = `
+          <div class="alert alert-success py-2 px-3 mb-0 mt-2">
+            <div class="fw-bold"><i class="bi bi-check-circle-fill me-1"></i> Coupon Validated: ${data.coupon_code}</div>
+            <div>${data.percentage}% Discount Applied · Saved <b>₹${parseFloat(data.discount_amount).toFixed(2)}</b></div>
+            ${data.customer_email ? `<small class="text-muted">Linked to ${data.customer_email}</small>` : ''}
+          </div>
+        `;
+        if (data.customer_phone && !document.getElementById('customer-phone-input').value) {
+          document.getElementById('customer-phone-input').value = data.customer_phone;
+        }
+        if (data.customer_email && !document.getElementById('customer-email-input').value) {
+          document.getElementById('customer-email-input').value = data.customer_email;
+        }
+      }
+      calculateBillTotals();
+    } catch (e) {
+      console.error(e);
+      alert("Error contacting coupon verification service.");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="bi bi-patch-check me-1"></i> Validate`;
+    }
+  }
+
+  function calculateBillTotals() {
+    if (!billingState.selectedOrder) return;
+    const activeItems = billingState.selectedOrder.items.filter(i => !i.is_cancelled);
+    const subtotal = activeItems.reduce((acc, i) => acc + (parseFloat(i.unit_price) * i.quantity), 0);
+
+    let discount = 0;
+    if (billingState.appliedCoupon) {
+      discount = parseFloat(billingState.appliedCoupon.discount_amount);
+      document.getElementById('calc-discount-row').classList.remove('d-none');
+      document.getElementById('calc-discount-label').innerText = `Coupon (${billingState.appliedCoupon.coupon_code}):`;
+      document.getElementById('calc-discount-val').innerText = `-₹${discount.toFixed(2)}`;
+    } else {
+      document.getElementById('calc-discount-row').classList.add('d-none');
+    }
+
+    const taxable = Math.max(0, subtotal - discount);
+    const tax = taxable * 0.05; // 5% total tax (2.5% CGST + 2.5% SGST)
+    const halfTax = tax / 2;
+    const grandTotal = taxable + tax;
+
+    document.getElementById('calc-subtotal').innerText = `₹${subtotal.toFixed(2)}`;
+    document.getElementById('calc-cgst').innerText = `₹${halfTax.toFixed(2)}`;
+    document.getElementById('calc-sgst').innerText = `₹${halfTax.toFixed(2)}`;
+    document.getElementById('calc-grand-total').innerText = `₹${grandTotal.toFixed(2)}`;
+  }
+
+  function setPaymentMethod(method) {
+    billingState.paymentMethod = method;
+    ['cash', 'upi', 'card'].forEach(m => {
+      document.getElementById(`pay-mode-${m}`).classList.remove('active');
+    });
+    document.getElementById(`pay-mode-${method}`).classList.add('active');
+
+    const refRow = document.getElementById('reference-input-row');
+    const refInp = document.getElementById('pay-reference-input');
+    if (method === 'cash') {
+      refRow.classList.add('d-none');
+    } else {
+      refRow.classList.remove('d-none');
+      refInp.placeholder = method === 'upi' ? 'Enter UPI Transaction ID / UTR (optional)' : 'Enter Card Approval / Ref # (optional)';
+    }
+  }
+
+  async function settleAndPrintBill() {
+    if (!billingState.selectedOrder) return;
+
+    const btn = document.getElementById('btn-settle-bill');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> Settling & Printing Receipt...`;
+
+    try {
+      const payload = {
+        order_id: billingState.selectedOrder.id,
+        payment_method: billingState.paymentMethod,
+        reference_number: document.getElementById('pay-reference-input').value.trim(),
+        coupon_code: billingState.appliedCoupon ? billingState.appliedCoupon.coupon_code : document.getElementById('coupon-code-input').value.trim(),
+        customer_phone: document.getElementById('customer-phone-input').value.trim(),
+        customer_email: document.getElementById('customer-email-input').value.trim()
+      };
+
+      const res = await fetch('/pos/api/billing/settle-payment/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert("Settlement Error: " + (data.error || "Could not complete transaction."));
+      } else {
+        billingState.lastSettledReceipt = data.receipt;
+        document.getElementById('modal-receipt-text').innerText = data.receipt.text_preview;
+        new bootstrap.Modal(document.getElementById('receiptModal')).show();
+
+        // Refresh orders list
+        billingState.selectedOrder = null;
+        document.getElementById('order-checkout-view').classList.add('d-none');
+        document.getElementById('no-order-selected-view').classList.remove('d-none');
+        loadBillingOrders();
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Network error: Could not complete settlement.");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="bi bi-printer-fill fs-5"></i> <span>COMPLETE PAYMENT & PRINT RECEIPT</span>`;
+    }
+  }
+
+  async function reprintCurrentBill() {
+    if (!billingState.lastSettledReceipt) return;
+    try {
+      const res = await fetch('/pos/api/billing/reprint-bill/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+        body: JSON.stringify({ receipt_id: billingState.lastSettledReceipt.receipt_number })
+      });
+      const data = await res.json();
+      alert(data.message || "Duplicate receipt printed!");
+    } catch (e) {
+      console.error(e);
+    }
+  }
+</script>
+{% endblock %}

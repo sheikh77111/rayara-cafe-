@@ -178,6 +178,21 @@ class Order(models.Model):
         on_delete=models.SET_NULL,
         related_name='orders'
     )
+    customer = models.ForeignKey(
+        'core.Customer',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='pos_orders'
+    )
+    coupon = models.ForeignKey(
+        'core.Coupon',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='pos_orders'
+    )
+    coupon_code = models.CharField(max_length=32, blank=True)
     customer_name = models.CharField(max_length=100, blank=True)
     customer_phone = models.CharField(max_length=20, blank=True)
     takeaway_notes = models.TextField(blank=True)

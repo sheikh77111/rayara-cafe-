@@ -4,14 +4,15 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Coffee, Utensils, Gift, Ticket, ArrowRight, Gamepad2, RotateCw,
   Sparkles, ChevronLeft, Mail, ShieldCheck, CheckCircle2, Clock,
-  LogOut, AlertCircle, X, KeyRound, ExternalLink, HeartCrack, Check
+  LogOut, AlertCircle, X, KeyRound, ExternalLink, HeartCrack, Check,
+  FileText, Receipt, QrCode
 } from 'lucide-react';
 import {
-  request, sendOtp, verifyOtp, getCustomerMe, customerLogout,
+  request, sendOtp, verifyOtp, getCustomerMe, customerLogout, getCustomerBills,
   getCustomerToken, getCustomerEmail, clearCustomerSession
 } from '../lib/api';
 
-type Screen = 'home' | 'menu' | 'games' | 'play' | 'coupon' | 'rewards';
+type Screen = 'home' | 'menu' | 'games' | 'play' | 'coupon' | 'rewards' | 'bills';
 
 interface CustomerState {
   isLoggedIn: boolean;
@@ -88,6 +89,8 @@ export default function Home() {
   const [coupons, setCoupons] = useState<CouponItem[]>([]);
   const [scratch, setScratch] = useState(false);
   const [answer, setAnswer] = useState('');
+  const [bills, setBills] = useState<any[]>([]);
+  const [tableParam, setTableParam] = useState<string>('');
 
   // Wheel Physics State
   const [wheelRotation, setWheelRotation] = useState(0);
@@ -117,8 +120,21 @@ export default function Home() {
   // Pending action after login
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
-  // Initialize customer session on load
+  // Initialize customer session on load & detect table QR
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tbl = params.get('table');
+      if (tbl) {
+        const cleanT = tbl.toUpperCase().startsWith('T') ? tbl.toUpperCase() : `T${tbl}`;
+        setTableParam(cleanT);
+        sessionStorage.setItem('rayara_table', cleanT);
+      } else {
+        const saved = sessionStorage.getItem('rayara_table');
+        if (saved) setTableParam(saved);
+      }
+    }
+
     const token = getCustomerToken();
     const email = getCustomerEmail();
     if (token && email) {
@@ -182,6 +198,22 @@ export default function Home() {
       const d = await request('/coupons/');
       setCoupons(d);
       setScreen('rewards');
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+
+  async function openBills() {
+    setError('');
+    if (!customer.isLoggedIn) {
+      setPendingAction('bills');
+      setShowLoginModal(true);
+      return;
+    }
+    try {
+      const d = await getCustomerBills(customer.email);
+      setBills(d);
+      setScreen('bills');
     } catch (e: any) {
       setError(e.message);
     }
@@ -262,6 +294,10 @@ export default function Home() {
         const d = await request('/coupons/');
         setCoupons(d);
         setScreen('rewards');
+      } else if (pendingAction === 'bills') {
+        const b = await getCustomerBills(custData.email);
+        setBills(b);
+        setScreen('bills');
       }
       setPendingAction(null);
     } catch (e: any) {
@@ -582,25 +618,51 @@ export default function Home() {
                 </span>
                 <ArrowRight className="text-gold" />
               </button>
+
+              <button
+                onClick={openBills}
+                className="bg-white rounded-2xl p-5 flex items-center gap-4 text-left shadow-sm border border-[#eadcc9] hover:border-gold/60 transition"
+              >
+                <span className="bg-cream p-3 rounded-xl text-wine"><FileText /></span>
+                <span className="flex-1">
+                  <b className="block text-wine text-base">My Digital Bills</b>
+                  <small className="text-stone-500">
+                    {customer.isLoggedIn
+                      ? `View past dining receipts & invoices for ${customer.email}`
+                      : 'Sign in to view your dining receipts'}
+                  </small>
+                </span>
+                <ArrowRight className="text-gold" />
+              </button>
             </div>
 
-            {/* Admin & Staff Portal Links */}
-            <div className="mt-8 border-t border-[#eadcc9] pt-4 flex items-center justify-center gap-4 text-[11px] text-stone-500">
+            {/* Admin & Staff Portal Dedicated Links */}
+            <div className="mt-8 border-t border-[#eadcc9] pt-4 flex flex-wrap items-center justify-center gap-3 text-[11px] text-stone-500">
               <a
-                href="http://localhost:8000/admin/"
+                href="http://localhost:8000/pos/tablet/"
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-wine font-semibold flex items-center gap-1"
+                className="hover:text-wine font-semibold flex items-center gap-1 bg-cream/70 px-2.5 py-1 rounded-full border border-sand-300"
               >
-                <ExternalLink size={11} /> Django Admin
+                <ExternalLink size={11} /> Staff Tablet POS
               </a>
               <span>•</span>
-              <a href="/owner" className="hover:text-wine font-semibold flex items-center gap-1">
+              <a
+                href="http://localhost:8000/pos/billing/"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-wine font-semibold flex items-center gap-1 bg-cream/70 px-2.5 py-1 rounded-full border border-sand-300"
+              >
+                <ExternalLink size={11} /> Billing Counter
+              </a>
+              <span>•</span>
+              <a
+                href="http://localhost:8000/pos/admin/"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-wine font-semibold flex items-center gap-1 bg-cream/70 px-2.5 py-1 rounded-full border border-sand-300"
+              >
                 <ExternalLink size={11} /> Owner Analytics
-              </a>
-              <span>•</span>
-              <a href="/staff" className="hover:text-wine font-semibold flex items-center gap-1">
-                <ExternalLink size={11} /> Staff Counter
               </a>
             </div>
 
@@ -1026,6 +1088,98 @@ export default function Home() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* DIGITAL BILLS & RECEIPT SCREEN */}
+        {screen === 'bills' && (
+          <section className="mt-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className="serif text-3xl text-wine font-bold">My Digital Bills</h1>
+                <p className="text-stone-500 text-xs mt-0.5 truncate max-w-[260px]">
+                  Official invoices for <b>{customer.email}</b>
+                </p>
+              </div>
+              <button
+                onClick={openBills}
+                className="text-xs text-wine font-semibold border border-wine/30 px-3 py-1.5 rounded-lg bg-white shadow-sm"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {bills.length === 0 ? (
+              <div className="mt-6 bg-white p-8 rounded-2xl text-center border border-[#eadcc9] shadow-sm">
+                <FileText className="mx-auto text-gold mb-2" size={36} />
+                <p className="font-semibold text-stone-700">No dining bills recorded yet</p>
+                <p className="text-xs text-stone-500 mt-1">
+                  When you settle your bill at the counter or show your rewards, your official digital receipts will appear here automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {bills.map((b: any, idx: number) => (
+                  <div key={idx} className="bg-white border-2 border-[#dfd2c0] rounded-2xl p-5 shadow-sm">
+                    {/* Header */}
+                    <div className="flex justify-between items-start border-b border-[#dfd2c0] pb-3">
+                      <div>
+                        <span className="text-[10px] bg-wine text-cream font-bold px-2 py-0.5 rounded-full uppercase">
+                          {b.order_type} {b.table ? `· Table ${b.table}` : ''}
+                        </span>
+                        <h3 className="font-bold text-wine text-base mt-1.5">Receipt #{b.receipt_number}</h3>
+                        <p className="text-[11px] text-stone-500">Order #{b.order_number} · {b.date}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-stone-500 block">Grand Total</span>
+                        <span className="text-xl font-bold text-wine">₹{parseFloat(b.grand_total).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Items */}
+                    <div className="py-3 divide-y divide-[#f2e9dc] text-xs">
+                      {b.items.map((it: any, iIdx: number) => (
+                        <div key={iIdx} className="py-1.5 flex justify-between items-center text-stone-700">
+                          <span>{it.qty}x {it.name}</span>
+                          <span className="font-semibold text-stone-900">₹{parseFloat(it.total).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Financials Breakdown */}
+                    <div className="border-t border-[#dfd2c0] pt-3 text-xs space-y-1 text-stone-600 bg-cream/40 p-3 rounded-xl">
+                      <div className="flex justify-between">
+                        <span>Subtotal:</span>
+                        <span>₹{parseFloat(b.subtotal).toFixed(2)}</span>
+                      </div>
+                      {parseFloat(b.discount) > 0 && (
+                        <div className="flex justify-between text-emerald-700 font-semibold">
+                          <span>Coupon Discount {b.coupon_code ? `(${b.coupon_code})` : ''}:</span>
+                          <span>-₹{parseFloat(b.discount).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span>Taxes (CGST + SGST):</span>
+                        <span>₹{parseFloat(b.tax).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-wine text-sm pt-1 border-t border-[#dfd2c0]">
+                        <span>Paid via {b.payment_method}:</span>
+                        <span>₹{parseFloat(b.grand_total).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 text-center">
+                      <button
+                        onClick={() => window.print()}
+                        className="text-xs text-wine font-semibold underline hover:opacity-80"
+                      >
+                        Print / Download Digital Tax Invoice
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>

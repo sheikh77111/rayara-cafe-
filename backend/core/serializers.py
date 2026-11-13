@@ -16,12 +16,16 @@ class MenuCategorySerializer(serializers.ModelSerializer):
         return MenuItemSerializer(obj.items.filter(available=True), many=True).data
 
 class CouponSerializer(serializers.ModelSerializer):
-    code = serializers.CharField(source='code_hint', read_only=True)
+    code = serializers.SerializerMethodField()
     customer_email = serializers.CharField(source='email', read_only=True)
     customer_phone = serializers.CharField(source='phone_number', read_only=True)
+
     class Meta:
         model = Coupon
         fields = ['id', 'code', 'customer_email', 'customer_phone', 'percentage', 'minimum_spend', 'max_discount', 'issued_at', 'valid_from', 'expires_at', 'status']
+
+    def get_code(self, obj):
+        return obj.code_plain if getattr(obj, 'code_plain', None) else f"RAYA-*{obj.code_hint}"
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:

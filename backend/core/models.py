@@ -77,6 +77,7 @@ class Coupon(models.Model):
     email = models.EmailField(blank=True, db_index=True)
     phone_number = models.CharField(max_length=20, blank=True, db_index=True)
     guest_session = models.ForeignKey(GuestSession, on_delete=models.SET_NULL, null=True, blank=True, related_name='coupons')
+    code_plain = models.CharField(max_length=64, blank=True, db_index=True)
     code_hash = models.CharField(max_length=64, unique=True)
     code_hint = models.CharField(max_length=8)
     percentage = models.PositiveSmallIntegerField()

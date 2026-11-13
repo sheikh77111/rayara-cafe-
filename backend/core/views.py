@@ -292,6 +292,7 @@ def play(request):
         coupon = Coupon.objects.create(
             customer=customer,
             email=customer.email,
+            code_plain=code,
             code_hash=digest(code),
             code_hint=code[-4:],
             percentage=reward.percentage,

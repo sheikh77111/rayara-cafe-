@@ -12,6 +12,7 @@ def send_resend_email(to_email: str, subject: str, html_content: str, text_conte
     Directly sends transactional email using Resend API.
     Uses User-Agent: resend-python/2.6.0 to pass Cloudflare filters.
     """
+    to_email = to_email.strip().lower()
     api_key = getattr(settings, 'RESEND_API_KEY', '').strip()
     from_email = getattr(settings, 'RESEND_FROM_EMAIL', 'Rayara Café <onboarding@resend.dev>').strip()
 
@@ -62,6 +63,7 @@ def send_email_otp(recipient_email: str, otp_code: str) -> dict:
     2. Django SMTP (if configured)
     3. Console / Dev Mode (fallback)
     """
+    recipient_email = recipient_email.strip().lower()
     subject = f"Your Rayara Café Login Code: {otp_code}"
 
     # Plain text version for email clients that do not render HTML

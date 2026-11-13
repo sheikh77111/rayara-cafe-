@@ -111,7 +111,6 @@ export default function Home() {
   const [otpStep, setOtpStep] = useState<'email' | 'otp'>('email');
   const [inputEmail, setInputEmail] = useState('');
   const [inputOtp, setInputOtp] = useState('');
-  const [devOtpHint, setDevOtpHint] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [otpSuccessMsg, setOtpSuccessMsg] = useState('');
@@ -248,11 +247,6 @@ export default function Home() {
       const res = await sendOtp(cleaned);
       setOtpStep('otp');
       setOtpSuccessMsg(res.message || 'Verification code sent to your email!');
-      if (res.dev_otp) {
-        setDevOtpHint(res.dev_otp);
-      } else {
-        setDevOtpHint('');
-      }
       setCooldownSecs(30);
     } catch (e: any) {
       setOtpError(e.message || 'Failed to send verification code.');
@@ -281,7 +275,6 @@ export default function Home() {
       setShowLoginModal(false);
       setOtpStep('email');
       setInputOtp('');
-      setDevOtpHint('');
 
       if (pendingAction === 'games') {
         setScreen('games');
@@ -1281,22 +1274,9 @@ export default function Home() {
                     className="w-full text-center tracking-widest text-xl font-bold font-mono py-3 border border-sand-300 rounded-xl focus:border-amber-warm focus:ring-2 focus:ring-amber-warm/30 outline-none bg-white shadow-inner"
                   />
 
-                  {/* Dev OTP Helper Pill (Only appears in development when recipient domain is unverified) */}
-                  {devOtpHint ? (
-                    <div className="mt-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => setInputOtp(devOtpHint)}
-                        className="text-[11px] bg-amber-100 text-amber-900 border border-amber-300 rounded-full px-3 py-1 font-semibold hover:bg-amber-200 transition inline-flex items-center gap-1 shadow-sm"
-                      >
-                        ⚡ Test Code: <b>{devOtpHint}</b> (Tap to autofill)
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-center text-[11px] text-stone-500 mt-2">
-                      Check your email inbox (and spam folder).
-                    </p>
-                  )}
+                  <p className="text-center text-[12px] text-stone-600 mt-2.5">
+                    We've emailed your 6-digit code via Resend. Check your inbox &amp; spam folder.
+                  </p>
                 </div>
 
                 <button

@@ -10,3 +10,4 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
         # Do not enforce CSRF for API requests
         return
+

@@ -939,3 +939,121 @@ class Phase12MultiStaffConcurrencyTests(TestCase):
         # Exactly 1 payment and 1 receipt recorded
         self.assertEqual(Payment.objects.filter(order_id=order_id).count(), 1)
         self.assertEqual(Receipt.objects.filter(order_id=order_id).count(), 1)
+
+
+class Phase13KitchenDisplaySystemTests(TestCase):
+    """
+    Validates Kitchen Display System (KDS) screen, live order streaming,
+    and kitchen chef preparation status workflow.
+    """
+    def setUp(self):
+        self.kitchen_user = User.objects.create_user(username='kitchen_screen', password='kpw', is_staff=True)
+        self.waiter_user = User.objects.create_user(username='waiter_arun', password='wpw', is_staff=True)
+        self.category = Category.objects.create(name='Kitchen Grill', display_order=1)
+        self.shawarma = Product.objects.create(category=self.category, name='Plate Shawarma', price=Decimal('220.00'))
+        self.table = DiningTable.objects.create(number='T5', capacity=4, status='available')
+
+        self.k_client = Client()
+        self.k_client.login(username='kitchen_screen', password='kpw')
+
+        self.w_client = Client()
+        self.w_client.login(username='waiter_arun', password='wpw')
+
+    def test_kitchen_dashboard_access_and_security(self):
+        """Unauthenticated clients redirect, staff/kitchen gets 200 OK."""
+        anon = Client()
+        resp_anon = anon.get(reverse('pos:kitchen_dashboard'))
+        self.assertEqual(resp_anon.status_code, 302)
+
+        resp_auth = self.k_client.get(reverse('pos:kitchen_dashboard'))
+        self.assertEqual(resp_auth.status_code, 200)
+        self.assertContains(resp_auth, "KITCHEN DISPLAY SYSTEM")
+
+    def test_kitchen_orders_live_feed(self):
+        """Staff creates order -> Kitchen receives order immediately with details."""
+        # Waiter sends order to kitchen
+        resp_create = self.w_client.post(
+            reverse('pos:api_order_create'),
+            data={
+                'order_type': 'dine_in',
+                'table_number': 'T5',
+                'items': [{
+                    'product_id': self.shawarma.id,
+                    'quantity': 2,
+                    'special_instructions': 'Extra spicy garlic'
+                }]
+            },
+            content_type='application/json'
+        )
+        self.assertEqual(resp_create.status_code, 201)
+        order_num = resp_create.json()['order_number']
+
+        # Kitchen polls API
+        resp_kds = self.k_client.get(reverse('pos:api_kitchen_orders'))
+        self.assertEqual(resp_kds.status_code, 200)
+        data = resp_kds.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['counts']['new'], 1)
+        self.assertEqual(data['counts']['total'], 1)
+
+        ord_entry = data['orders'][0]
+        self.assertEqual(ord_entry['order_number'], order_num)
+        self.assertEqual(ord_entry['table_number'], 'T5')
+        self.assertEqual(ord_entry['status'], 'new')
+        self.assertEqual(len(ord_entry['items']), 1)
+        self.assertEqual(ord_entry['items'][0]['name'], 'Plate Shawarma')
+        self.assertEqual(ord_entry['items'][0]['quantity'], 2)
+        self.assertEqual(ord_entry['items'][0]['special_instructions'], 'Extra spicy garlic')
+
+    def test_kitchen_status_workflow(self):
+        """Chef transitions status: new -> preparing -> ready -> completed."""
+        order = Order.objects.create(
+            order_number='D-KITCHEN-TEST',
+            order_type='dine_in',
+            table=self.table,
+            created_by=self.waiter_user,
+            status='new'
+        )
+        item = OrderItem.objects.create(
+            order=order,
+            product=self.shawarma,
+            product_name='Plate Shawarma',
+            unit_price=Decimal('220.00'),
+            quantity=1,
+            line_total=Decimal('220.00'),
+            status='ordered'
+        )
+
+        # 1. Chef starts cooking -> preparing
+        resp_prep = self.k_client.post(
+            reverse('pos:api_kitchen_update_status'),
+            data={'order_id': order.id, 'status': 'preparing'},
+            content_type='application/json'
+        )
+        self.assertEqual(resp_prep.status_code, 200)
+        order.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(order.status, 'preparing')
+        self.assertEqual(item.status, 'preparing')
+
+        # 2. Chef finishes cooking -> ready
+        resp_ready = self.k_client.post(
+            reverse('pos:api_kitchen_update_status'),
+            data={'order_id': order.id, 'status': 'ready'},
+            content_type='application/json'
+        )
+        self.assertEqual(resp_ready.status_code, 200)
+        order.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(order.status, 'ready')
+        self.assertEqual(item.status, 'ready')
+
+        # 3. Waiter serves -> completed
+        resp_comp = self.k_client.post(
+            reverse('pos:api_kitchen_update_status'),
+            data={'order_id': order.id, 'status': 'completed'},
+            content_type='application/json'
+        )
+        self.assertEqual(resp_comp.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'completed')

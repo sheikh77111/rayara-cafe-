@@ -96,6 +96,8 @@ def staff_login(request):
             )
             if next_url and next_url.startswith('/pos/'):
                 return redirect(next_url)
+            if user.username == 'kitchen':
+                return redirect('/pos/kitchen/')
             return redirect('/pos/tablet/')
         else:
             messages.error(request, "Invalid staff username or password.")
@@ -251,3 +253,58 @@ def owner_dashboard(request):
         'user': request.user,
         'settings': BusinessSettings.get_settings(),
     })
+
+
+@staff_required
+def kitchen_dashboard(request):
+    """
+    Kitchen Display System (KDS) Screen (Phase 6 / Tablet KOT Screen).
+    Receives live order tickets, sound chimes, and preparation updates.
+    """
+    return render(request, 'pos/kitchen.html', {
+        'user': request.user,
+        'is_owner': is_owner(request.user),
+        'settings': BusinessSettings.get_settings(),
+    })
+
+
+@csrf_protect
+def kitchen_login(request):
+    """
+    Dedicated Login Portal for Kitchen Staff & Chefs.
+    """
+    if request.user.is_authenticated:
+        if is_staff_member(request.user):
+            return redirect('/pos/kitchen/')
+        logout(request)
+
+    next_url = request.GET.get('next') or request.POST.get('next') or '/pos/kitchen/'
+
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            if not user.is_active:
+                messages.error(request, "This kitchen account has been deactivated.")
+                return render(request, 'pos/kitchen_login.html', {'next': next_url})
+
+            if not is_staff_member(user):
+                messages.error(request, "Access Denied: Staff or Kitchen privileges required.")
+                return render(request, 'pos/kitchen_login.html', {'next': next_url})
+
+            login(request, user)
+            AuditLog.objects.create(
+                user=user,
+                action='kitchen_login',
+                entity_type='user',
+                entity_id=str(user.id),
+                details=f"Kitchen staff {user.username} logged into Kitchen Display System",
+                ip_address=request.META.get('REMOTE_ADDR', '')
+            )
+            return redirect(next_url if next_url.startswith('/pos/') else '/pos/kitchen/')
+        else:
+            messages.error(request, "Invalid kitchen username or password.")
+
+    return render(request, 'pos/kitchen_login.html', {'next': next_url})

@@ -1,0 +1,688 @@
+{% extends "pos/base.html" %}
+
+{% block title %}Kitchen Display System (KDS) | Rayara Cafe{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root {
+    --kds-bg: #121316;
+    --kds-card-bg: #1C1E24;
+    --kds-card-border: #2D3139;
+    --kds-amber: #F5A623;
+    --kds-cyan: #38BDF8;
+    --kds-green: #10B981;
+    --kds-red: #EF4444;
+  }
+  body {
+    background-color: var(--kds-bg) !important;
+    color: #E2E8F0;
+  }
+  .navbar-rayara {
+    background: #1A1C23 !important;
+    border-bottom: 1px solid #2D3139 !important;
+  }
+  .kds-container {
+    max-width: 100%;
+    padding: 14px;
+  }
+  /* Pulse Animation for New Orders */
+  @keyframes glow-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.7); }
+    70% { box-shadow: 0 0 0 14px rgba(245, 166, 35, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0); }
+  }
+  @keyframes urgent-pulse {
+    0% { border-color: rgba(239, 68, 68, 0.9); }
+    50% { border-color: rgba(245, 166, 35, 0.9); }
+    100% { border-color: rgba(239, 68, 68, 0.9); }
+  }
+  .kds-card {
+    background-color: var(--kds-card-bg);
+    border: 2px solid var(--kds-card-border);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: transform 0.15s ease, border-color 0.2s ease;
+    overflow: hidden;
+  }
+  .kds-card.status-new {
+    border-color: var(--kds-amber);
+    animation: glow-pulse 2s infinite;
+  }
+  .kds-card.status-preparing {
+    border-color: var(--kds-cyan);
+  }
+  .kds-card.status-ready {
+    border-color: var(--kds-green);
+  }
+  .kds-card.urgent-timer {
+    animation: urgent-pulse 1.2s infinite;
+  }
+  .kds-card-header {
+    padding: 12px 14px;
+    background-color: #242730;
+    border-bottom: 1px solid #2D3139;
+  }
+  .kds-table-title {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    line-height: 1.1;
+  }
+  .kds-item-row {
+    padding: 10px 14px;
+    border-bottom: 1px dashed #2A2E38;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .kds-item-row:last-child {
+    border-bottom: none;
+  }
+  .kds-qty-badge {
+    background: #0F172A;
+    border: 1.5px solid var(--kds-amber);
+    color: #F8FAFC;
+    font-size: 16px;
+    font-weight: 800;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .kds-item-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: #FFFFFF;
+    line-height: 1.2;
+  }
+  .kds-item-note {
+    background-color: rgba(245, 166, 35, 0.15);
+    border-left: 3px solid var(--kds-amber);
+    color: #FCD34D;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+    font-weight: 600;
+  }
+  .kds-addon-banner {
+    background: linear-gradient(90deg, #ea580c, #c2410c);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 6px 12px;
+    text-align: center;
+  }
+  .timer-pill {
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .timer-green { background: #064E3B; color: #34D399; }
+  .timer-amber { background: #78350F; color: #FBBF24; }
+  .timer-red   { background: #7F1D1D; color: #F87171; }
+
+  /* Top Slide Banner for New KOT Alert */
+  #kds-alert-toast {
+    position: fixed;
+    top: 65px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    min-width: 320px;
+    max-width: 90vw;
+    display: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  }
+  .btn-kds-filter {
+    background: #1E2128;
+    color: #94A3B8;
+    border: 1px solid #333842;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 20px;
+  }
+  .btn-kds-filter.active {
+    background: var(--kds-amber);
+    color: #121316;
+    border-color: var(--kds-amber);
+    font-weight: 700;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Top Alert Banner for Incoming Orders -->
+<div id="kds-alert-toast" class="alert alert-warning border-2 border-warning text-dark py-2.5 px-4 rounded-4 fw-bold d-flex align-items-center justify-content-between shadow-lg">
+  <div class="d-flex align-items-center gap-2">
+    <i class="bi bi-bell-fill fs-5 text-danger animate-bounce"></i>
+    <span id="kds-alert-message">New Order Received!</span>
+  </div>
+  <button type="button" class="btn-close ms-3" onclick="hideAlertToast()"></button>
+</div>
+
+<div class="kds-container">
+  <!-- Top Controls & Metrics Bar -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+    <!-- Left: Brand & Live Indicator -->
+    <div class="d-flex align-items-center gap-3">
+      <div class="d-flex align-items-center gap-2">
+        <span class="fs-4 text-warning"><i class="bi bi-fire"></i></span>
+        <div>
+          <h1 class="h5 fw-bold mb-0 text-white serif-brand">KITCHEN DISPLAY SYSTEM</h1>
+          <div class="small text-secondary" style="font-size: 11px;">
+            <span class="spinner-grow spinner-grow-sm text-success align-middle" style="width: 8px; height: 8px;"></span>
+            <span id="sync-indicator">Live Sync Active</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Buttons -->
+      <div class="btn-group ms-lg-3" role="group">
+        <button type="button" class="btn btn-kds-filter active" onclick="setKdsFilter('all')" id="flt-all">
+          All Orders <span class="badge bg-secondary ms-1" id="badge-count-all">0</span>
+        </button>
+        <button type="button" class="btn btn-kds-filter" onclick="setKdsFilter('new')" id="flt-new">
+          🔥 New <span class="badge bg-warning text-dark ms-1" id="badge-count-new">0</span>
+        </button>
+        <button type="button" class="btn btn-kds-filter" onclick="setKdsFilter('preparing')" id="flt-preparing">
+          🍳 Cooking <span class="badge bg-info text-dark ms-1" id="badge-count-preparing">0</span>
+        </button>
+        <button type="button" class="btn btn-kds-filter" onclick="setKdsFilter('ready')" id="flt-ready">
+          ✅ Ready <span class="badge bg-success ms-1" id="badge-count-ready">0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Sound & Display Utility Buttons -->
+    <div class="d-flex align-items-center gap-2">
+      <!-- Audio Bell Toggle Button -->
+      <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 fw-bold" id="btn-sound-toggle" onclick="toggleSound()">
+        <i class="bi bi-volume-up-fill me-1" id="icon-sound"></i>
+        <span id="text-sound">Sound ON</span>
+      </button>
+
+      <!-- Test Chime Button -->
+      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-3" onclick="testSoundChime()" title="Test notification sound">
+        <i class="bi bi-bell-fill text-warning me-1"></i> Test Bell
+      </button>
+
+      <!-- Fullscreen Toggle Button -->
+      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-3" onclick="toggleFullscreen()" title="Toggle full screen">
+        <i class="bi bi-arrows-fullscreen text-secondary me-1"></i> Fullscreen
+      </button>
+
+      <!-- Refresh Now -->
+      <button type="button" class="btn btn-sm btn-dark border-secondary rounded-pill px-2.5" onclick="fetchKitchenOrders()" title="Refresh now">
+        <i class="bi bi-arrow-clockwise text-secondary"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Orders Grid Container -->
+  <div id="kitchen-orders-grid" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-3">
+    <!-- Order cards rendered dynamically via JavaScript -->
+  </div>
+
+  <!-- Empty State when no orders -->
+  <div id="kitchen-empty-state" class="text-center py-5 d-none">
+    <div class="text-secondary opacity-50 mb-3" style="font-size: 54px;">
+      <i class="bi bi-check2-circle"></i>
+    </div>
+    <h3 class="h5 fw-bold text-light">All Caught Up, Chef!</h3>
+    <p class="text-secondary small mb-0">No active kitchen orders right now. Waiting for new orders from the staff tablet...</p>
+  </div>
+</div>
+
+<!-- Raw KOT Modal View -->
+<div class="modal fade" id="kotModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light border-secondary">
+      <div class="modal-header border-secondary py-2">
+        <h5 class="modal-title small fw-bold text-warning">
+          <i class="bi bi-receipt me-1"></i> Kitchen Order Ticket (KOT)
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <pre id="kot-preview-text" class="bg-black p-3 rounded-3 text-warning font-monospace small mb-0" style="white-space: pre-wrap; font-size: 13px;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let kdsOrders = [];
+  let kdsFilter = 'all';
+  let soundEnabled = true;
+  let previousOrderIds = new Set();
+  let isFirstLoad = true;
+  let pollInterval = null;
+  let audioContext = null;
+
+  // Initialize Web Audio API synthesizer for natural bell chime
+  function getAudioContext() {
+    if (!audioContext) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        audioContext = new AudioCtx();
+      }
+    }
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume();
+    }
+    return audioContext;
+  }
+
+  // Dual-tone restaurant kitchen bell sound (880Hz -> 1046Hz)
+  function playKitchenBell() {
+    if (!soundEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      const now = ctx.currentTime;
+      // High chime tone
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now); // A5 note
+      osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.15); // C6 note
+      gain1.gain.setValueAtTime(0.4, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.9);
+
+      // Low bell body tone
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(440, now);
+      gain2.gain.setValueAtTime(0.3, now);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now);
+      osc2.stop(now + 1.2);
+    } catch (e) {
+      console.warn("Audio playback exception:", e);
+    }
+  }
+
+  // 3-tone urgency chime for Add-ons or Cancellations
+  function playAlertChime() {
+    if (!soundEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      [0, 0.12, 0.24].forEach((offset, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(idx === 2 ? 1174 : 880, now + offset);
+        gain.gain.setValueAtTime(0.2, now + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.2);
+      });
+    } catch (e) {
+      console.warn("Alert chime exception:", e);
+    }
+  }
+
+  function testSoundChime() {
+    getAudioContext();
+    playKitchenBell();
+    showKdsAlert("🔔 Sound Test: Chime Working Loud & Clear!");
+  }
+
+  function toggleSound() {
+    soundEnabled = !soundEnabled;
+    const btn = document.getElementById('btn-sound-toggle');
+    const icon = document.getElementById('icon-sound');
+    const text = document.getElementById('text-sound');
+    if (soundEnabled) {
+      btn.className = 'btn btn-sm btn-outline-warning rounded-pill px-3 fw-bold';
+      icon.className = 'bi bi-volume-up-fill me-1';
+      text.innerText = 'Sound ON';
+      getAudioContext();
+      playKitchenBell();
+    } else {
+      btn.className = 'btn btn-sm btn-secondary rounded-pill px-3';
+      icon.className = 'bi bi-volume-mute-fill me-1';
+      text.innerText = 'Sound MUTED';
+    }
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.warn(`Fullscreen error: ${err.message}`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  }
+
+  function showKdsAlert(message) {
+    const toast = document.getElementById('kds-alert-toast');
+    const msgElem = document.getElementById('kds-alert-message');
+    msgElem.innerText = message;
+    toast.style.display = 'flex';
+    setTimeout(() => {
+      hideAlertToast();
+    }, 6000);
+  }
+
+  function hideAlertToast() {
+    const toast = document.getElementById('kds-alert-toast');
+    toast.style.display = 'none';
+  }
+
+  function setKdsFilter(filter) {
+    kdsFilter = filter;
+    ['all', 'new', 'preparing', 'ready'].forEach(f => {
+      const btn = document.getElementById(`flt-${f}`);
+      if (f === filter) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    renderKitchenOrders();
+  }
+
+  // Format seconds to mm:ss
+  function formatTimer(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // Fetch live active kitchen orders
+  async function fetchKitchenOrders() {
+    try {
+      const res = await fetch('/pos/api/kitchen/orders/', {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!res.ok) {
+        document.getElementById('sync-indicator').innerText = 'Sync Retrying...';
+        return;
+      }
+      const data = await res.json();
+      document.getElementById('sync-indicator').innerText = `Live (${new Date().toLocaleTimeString()})`;
+
+      // Update counters
+      document.getElementById('badge-count-all').innerText = data.counts.total || 0;
+      document.getElementById('badge-count-new').innerText = data.counts.new || 0;
+      document.getElementById('badge-count-preparing').innerText = data.counts.preparing || 0;
+      document.getElementById('badge-count-ready').innerText = data.counts.ready || 0;
+
+      const currentIds = new Set(data.orders.map(o => o.id));
+
+      // Detect newly arrived orders for sound alert & notification
+      if (!isFirstLoad) {
+        let hasNew = false;
+        let newOrderTarget = '';
+        data.orders.forEach(o => {
+          if (!previousOrderIds.has(o.id) && o.status === 'new') {
+            hasNew = true;
+            newOrderTarget = o.order_type === 'dine_in' ? `Table ${o.table_number || '?'}` : 'Takeaway';
+          }
+        });
+
+        if (hasNew) {
+          playKitchenBell();
+          showKdsAlert(`🔔 NEW KOT: ${newOrderTarget} just placed by staff!`);
+        }
+      }
+
+      previousOrderIds = currentIds;
+      isFirstLoad = false;
+      kdsOrders = data.orders || [];
+      renderKitchenOrders();
+
+    } catch (err) {
+      console.error("KDS sync error:", err);
+      document.getElementById('sync-indicator').innerText = 'Sync Reconnecting...';
+    }
+  }
+
+  // Render order cards
+  function renderKitchenOrders() {
+    const grid = document.getElementById('kitchen-orders-grid');
+    const emptyState = document.getElementById('kitchen-empty-state');
+
+    // Filter list
+    let filtered = kdsOrders;
+    if (kdsFilter !== 'all') {
+      filtered = kdsOrders.filter(o => o.status === kdsFilter);
+    }
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '';
+      emptyState.classList.remove('d-none');
+      return;
+    }
+
+    emptyState.classList.add('d-none');
+    let html = '';
+
+    filtered.forEach(ord => {
+      const isUrgent = ord.elapsed_seconds > (20 * 60);
+      let timerClass = 'timer-green';
+      if (ord.elapsed_seconds >= 600 && ord.elapsed_seconds < 1200) timerClass = 'timer-amber';
+      if (ord.elapsed_seconds >= 1200) timerClass = 'timer-red';
+
+      const targetTitle = ord.order_type === 'dine_in' ? `TABLE ${ord.table_number || '?'}` : `TAKEAWAY`;
+      const targetSub = ord.order_type === 'takeaway' && ord.customer_name ? `(${ord.customer_name})` : '';
+
+      // Action buttons depending on status
+      let actionButtons = '';
+      if (ord.status === 'new') {
+        actionButtons = `
+          <button class="btn btn-warning w-100 fw-bold py-2 text-dark shadow-sm" onclick="updateOrderStatus(${ord.id}, 'preparing')">
+            <i class="bi bi-fire me-1"></i> Start Cooking
+          </button>
+        `;
+      } else if (ord.status === 'preparing') {
+        actionButtons = `
+          <button class="btn btn-success w-100 fw-bold py-2 shadow-sm" onclick="updateOrderStatus(${ord.id}, 'ready')">
+            <i class="bi bi-check-circle-fill me-1"></i> Mark Ready
+          </button>
+        `;
+      } else if (ord.status === 'ready') {
+        actionButtons = `
+          <button class="btn btn-info w-100 fw-bold py-2 text-dark shadow-sm" onclick="updateOrderStatus(${ord.id}, 'completed')">
+            <i class="bi bi-bell-fill me-1"></i> Mark Served
+          </button>
+        `;
+      }
+
+      // Items list HTML
+      let itemsHtml = '';
+      ord.items.forEach(it => {
+        const batchBadge = it.batch_number > 1 ? `<span class="badge bg-danger ms-1">B#${it.batch_number}</span>` : '';
+        const noteHtml = it.special_instructions ? `<div class="kds-item-note"><i class="bi bi-chat-left-dots-fill me-1"></i>NOTE: ${escapeHtml(it.special_instructions)}</div>` : '';
+        itemsHtml += `
+          <div class="kds-item-row">
+            <div class="kds-qty-badge">${it.quantity}x</div>
+            <div class="flex-grow-1">
+              <div class="kds-item-name">${escapeHtml(it.name)} ${batchBadge}</div>
+              ${noteHtml}
+            </div>
+          </div>
+        `;
+      });
+
+      // Cancelled items (if any)
+      ord.cancelled_items.forEach(c => {
+        itemsHtml += `
+          <div class="kds-item-row opacity-50 bg-danger bg-opacity-10">
+            <div class="kds-qty-badge text-danger border-danger"><del>${c.quantity}x</del></div>
+            <div class="flex-grow-1 text-decoration-line-through text-danger">
+              <span class="fw-bold">${escapeHtml(c.name)}</span>
+              <div class="small">[CANCELLED: ${escapeHtml(c.reason)}]</div>
+            </div>
+          </div>
+        `;
+      });
+
+      // Addon banner
+      const addonBanner = ord.has_addons ? `<div class="kds-addon-banner"><i class="bi bi-plus-circle-fill me-1"></i> Add-on Items Added (Batch #${ord.current_batch})</div>` : '';
+
+      html += `
+        <div class="col" id="order-card-${ord.id}">
+          <div class="kds-card status-${ord.status} ${isUrgent ? 'urgent-timer' : ''}">
+            ${addonBanner}
+            <!-- Card Header -->
+            <div class="kds-card-header">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="badge ${ord.order_type === 'dine_in' ? 'bg-primary' : 'bg-purple'}" style="font-size: 11px;">
+                  ${ord.order_type === 'dine_in' ? 'DINE-IN' : 'TAKEAWAY'}
+                </span>
+                <span class="timer-pill ${timerClass}" id="timer-val-${ord.id}" data-seconds="${ord.elapsed_seconds}">
+                  ⏱️ ${formatTimer(ord.elapsed_seconds)}
+                </span>
+              </div>
+              <div class="d-flex justify-content-between align-items-baseline">
+                <div class="kds-table-title text-white">
+                  ${targetTitle} <span class="fs-6 text-secondary fw-normal">${targetSub}</span>
+                </div>
+                <div class="text-secondary small font-monospace">#${ord.order_number}</div>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-1" style="font-size: 11px;">
+                <span class="text-secondary">Server: <b class="text-light">${escapeHtml(ord.created_by)}</b></span>
+                <span class="text-secondary">${ord.total_items_count} items</span>
+              </div>
+            </div>
+
+            <!-- Items Body -->
+            <div class="flex-grow-1 overflow-y-auto" style="max-height: 280px;">
+              ${itemsHtml}
+            </div>
+
+            <!-- Card Footer -->
+            <div class="p-2.5 bg-dark bg-opacity-50 border-top border-secondary border-opacity-25 d-flex gap-2">
+              <div class="flex-grow-1">
+                ${actionButtons}
+              </div>
+              <button class="btn btn-outline-secondary px-2.5" onclick="viewKotTicket('${ord.id}')" title="View Thermal KOT Preview">
+                <i class="bi bi-receipt"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+
+    grid.innerHTML = html;
+  }
+
+  // Update order preparation status
+  async function updateOrderStatus(orderId, newStatus) {
+    try {
+      const res = await fetch('/pos/api/kitchen/orders/update-status/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ order_id: orderId, status: newStatus })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Quick local state update
+        const ord = kdsOrders.find(o => o.id === orderId);
+        if (ord) {
+          ord.status = newStatus;
+          renderKitchenOrders();
+        }
+        fetchKitchenOrders();
+      } else {
+        alert(data.error || 'Failed to update order status');
+      }
+    } catch (err) {
+      console.error("Status update error:", err);
+    }
+  }
+
+  function viewKotTicket(orderId) {
+    const ord = kdsOrders.find(o => o.id == orderId);
+    if (!ord || !ord.kot_text) {
+      document.getElementById('kot-preview-text').innerText = 'No KOT text available for this order.';
+    } else {
+      document.getElementById('kot-preview-text').innerText = ord.kot_text;
+    }
+    const modal = new bootstrap.Modal(document.getElementById('kotModal'));
+    modal.show();
+  }
+
+  // Increment local elapsed timers every second
+  setInterval(() => {
+    kdsOrders.forEach(ord => {
+      ord.elapsed_seconds += 1;
+      const elem = document.getElementById(`timer-val-${ord.id}`);
+      if (elem) {
+        elem.innerText = `⏱️ ${formatTimer(ord.elapsed_seconds)}`;
+        if (ord.elapsed_seconds >= 1200) {
+          elem.className = 'timer-pill timer-red';
+        } else if (ord.elapsed_seconds >= 600) {
+          elem.className = 'timer-pill timer-amber';
+        }
+      }
+    });
+  }, 1000);
+
+  // Poll kitchen orders every 2.5 seconds
+  pollInterval = setInterval(fetchKitchenOrders, 2500);
+
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  // Unlock audio on first user touch / click
+  document.addEventListener('click', function unlockAudio() {
+    getAudioContext();
+    document.removeEventListener('click', unlockAudio);
+  }, { once: true });
+
+  // Initial fetch
+  fetchKitchenOrders();
+</script>
+{% endblock %}

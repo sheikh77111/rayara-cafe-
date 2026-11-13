@@ -400,6 +400,145 @@ def api_active_orders(request):
 
 
 # ==============================================================================
+# KITCHEN DISPLAY SYSTEM (KDS) APIs
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsStaffOrOwnerUser])
+def api_kitchen_orders(request):
+    """
+    Returns live active orders for the Kitchen Display System (KDS).
+    Optimized for low-latency tablet/screen polling every 2-3 seconds with
+    elapsed-time metrics, batch tracking, and special kitchen instructions.
+    """
+    now = timezone.now()
+    orders = Order.objects.filter(
+        status__in=['new', 'preparing', 'ready']
+    ).prefetch_related('items', 'items__product').order_by('created_at')
+
+    result = []
+    counts = {'total': 0, 'new': 0, 'preparing': 0, 'ready': 0}
+
+    for ord in orders:
+        counts['total'] += 1
+        if ord.status in counts:
+            counts[ord.status] += 1
+
+        active_items = []
+        cancelled_items = []
+        has_addons = False
+
+        for it in ord.items.all():
+            if it.is_cancelled:
+                cancelled_items.append({
+                    'id': it.id,
+                    'name': it.product_name,
+                    'quantity': it.quantity,
+                    'reason': it.cancellation_reason or 'Cancelled by staff',
+                    'batch_number': it.batch_number,
+                })
+            else:
+                if it.batch_number > 1:
+                    has_addons = True
+                active_items.append({
+                    'id': it.id,
+                    'name': it.product_name,
+                    'quantity': it.quantity,
+                    'special_instructions': it.special_instructions,
+                    'batch_number': it.batch_number,
+                    'status': it.status,
+                })
+
+        elapsed_sec = int((now - ord.created_at).total_seconds())
+        server_name = ord.created_by.get_full_name() or ord.created_by.username
+
+        # Get formatted KOT text preview from the latest print job if available
+        kot_job = ord.print_jobs.filter(printer_type='kitchen').order_by('-created_at').first()
+        kot_text = kot_job.content if kot_job else ''
+
+        result.append({
+            'id': ord.id,
+            'order_number': ord.order_number,
+            'order_type': ord.order_type,
+            'table_number': ord.table.number if ord.table else None,
+            'customer_name': ord.customer_name,
+            'customer_phone': ord.customer_phone,
+            'takeaway_notes': ord.takeaway_notes,
+            'status': ord.status,
+            'created_by': server_name,
+            'created_at': ord.created_at.isoformat(),
+            'elapsed_seconds': elapsed_sec,
+            'current_batch': ord.current_batch,
+            'has_addons': has_addons,
+            'items': active_items,
+            'cancelled_items': cancelled_items,
+            'total_items_count': sum(it['quantity'] for it in active_items),
+            'kot_text': kot_text,
+        })
+
+    return Response({
+        'success': True,
+        'server_time': now.isoformat(),
+        'counts': counts,
+        'orders': result
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsStaffOrOwnerUser])
+def api_kitchen_update_status(request):
+    """
+    Updates the preparation state of an order from the kitchen screen:
+    'new' -> 'preparing' -> 'ready' -> 'completed'.
+    """
+    order_id = request.data.get('order_id')
+    new_status = request.data.get('status', '').strip().lower()
+
+    if not order_id:
+        return Response({'error': 'Order ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    valid_statuses = ('new', 'preparing', 'ready', 'completed')
+    if new_status not in valid_statuses:
+        return Response({'error': f"Invalid status: '{new_status}'. Must be one of {valid_statuses}."}, status=status.HTTP_400_BAD_REQUEST)
+
+    with transaction.atomic():
+        order = Order.objects.select_for_update().filter(id=order_id).first()
+        if not order:
+            return Response({'error': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        old_status = order.status
+        order.status = new_status
+        order.save(update_fields=['status'])
+
+        # Update item statuses accordingly
+        item_status_map = {
+            'new': 'ordered',
+            'preparing': 'preparing',
+            'ready': 'ready',
+            'completed': 'served'
+        }
+        target_item_status = item_status_map.get(new_status, 'ordered')
+        order.items.filter(is_cancelled=False).update(status=target_item_status)
+
+        AuditLog.objects.create(
+            user=request.user,
+            action='kitchen_status_updated',
+            entity_type='order',
+            entity_id=str(order.id),
+            details=f"Kitchen updated Order {order.order_number} from '{old_status}' to '{new_status}'",
+            ip_address=request.META.get('REMOTE_ADDR', '')
+        )
+
+        return Response({
+            'success': True,
+            'order_id': order.id,
+            'order_number': order.order_number,
+            'status': order.status,
+            'message': f"Order {order.order_number} marked as {new_status.title()}."
+        })
+
+
+# ==============================================================================
 # BILLING COUNTER & CUSTOMER COUPON VALIDATION APIs
 # ==============================================================================
 

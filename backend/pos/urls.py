@@ -17,16 +17,20 @@ urlpatterns = [
 
     # HTML Portals
     path('tablet/', views.tablet_dashboard, name='tablet'),
+    path('kitchen/', views.kitchen_dashboard, name='kitchen_dashboard'),
+    path('kitchen/login/', views.kitchen_login, name='kitchen_login'),
     path('billing/', views.billing_counter, name='billing'),
     path('admin/', views.owner_dashboard, name='owner_dashboard'),
 
-    # Tablet APIs
+    # Tablet & Kitchen Display APIs
     path('api/tables/', api_views.api_tables, name='api_tables'),
     path('api/menu/', api_views.api_menu, name='api_menu'),
     path('api/orders/create/', api_views.api_order_create, name='api_order_create'),
     path('api/orders/add-items/', api_views.api_order_add_items, name='api_order_add_items'),
     path('api/orders/cancel-item/', api_views.api_order_cancel_item, name='api_order_cancel_item'),
     path('api/orders/active/', api_views.api_active_orders, name='api_active_orders'),
+    path('api/kitchen/orders/', api_views.api_kitchen_orders, name='api_kitchen_orders'),
+    path('api/kitchen/orders/update-status/', api_views.api_kitchen_update_status, name='api_kitchen_update_status'),
 
     # Billing APIs
     path('api/billing/validate-coupon/', api_views.api_validate_coupon, name='api_validate_coupon'),

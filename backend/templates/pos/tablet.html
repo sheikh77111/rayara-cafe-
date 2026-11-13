@@ -153,7 +153,10 @@
         </div>
       </div>
     </div>
-    <div class="col-auto">
+    <div class="col-auto d-flex gap-2">
+      <a href="{% url 'pos:kitchen_dashboard' %}" class="btn btn-outline-warning btn-sm rounded-pill" target="_blank" title="Open Kitchen Display Screen">
+        <i class="bi bi-fire me-1 text-warning"></i> Kitchen Screen
+      </a>
       <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="openActiveOrdersModal()">
         <i class="bi bi-card-checklist me-1"></i> Active Orders (<span id="active-count-badge">0</span>)
       </button>

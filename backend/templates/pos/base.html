@@ -122,6 +122,11 @@
           </a>
         </li>
         <li class="nav-item">
+          <a class="nav-link text-white fw-semibold px-3 rounded-3 {% if request.path == '/pos/kitchen/' %}bg-white bg-opacity-10 text-warning{% endif %}" href="{% url 'pos:kitchen_dashboard' %}">
+            <i class="bi bi-fire me-1 text-warning"></i> Kitchen KDS
+          </a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link text-white fw-semibold px-3 rounded-3 {% if request.path == '/pos/billing/' %}bg-white bg-opacity-10 text-warning{% endif %}" href="{% url 'pos:billing' %}">
             <i class="bi bi-receipt me-1"></i> Billing Counter
           </a>

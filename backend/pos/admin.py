@@ -1,9 +1,21 @@
 from django.contrib import admin
 from .models import (
     BusinessSettings, DiningTable, Category, Product,
+    ProductOptionGroup, ProductOption,
     TaxConfiguration, Discount, Order, OrderItem,
     PrinterConfiguration, PrintJob, Payment, Receipt, AuditLog
 )
+
+class ProductOptionInline(admin.TabularInline):
+    model = ProductOption
+    extra = 1
+
+@admin.register(ProductOptionGroup)
+class ProductOptionGroupAdmin(admin.ModelAdmin):
+    list_display = ('product', 'name', 'selection_type', 'is_required', 'display_order')
+    list_filter = ('selection_type', 'is_required')
+    search_fields = ('product__name', 'name')
+    inlines = [ProductOptionInline]
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem

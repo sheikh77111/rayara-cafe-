@@ -176,6 +176,8 @@ def format_receipt_ticket(receipt, is_reprint=False):
     for it in active_items:
         name = it.product_name[:21]
         lines.append(f"{name:<22} {it.quantity:>4} {it.unit_price:>6.2f} {it.line_total:>8.2f}")
+        if it.special_instructions:
+            lines.append(f"  * {it.special_instructions[:38]}")
 
     lines.append(divider)
     lines.append(f"{'Subtotal:':<30} {biz.currency_symbol} {receipt.subtotal:>9.2f}")
@@ -225,6 +227,8 @@ def format_receipt_ticket(receipt, is_reprint=False):
 
     for it in active_items:
         buf += f"{it.product_name[:20]:<20} {it.quantity:>3}x {it.line_total:>8.2f}\n".encode('utf-8')
+        if it.special_instructions:
+            buf += f"  * {it.special_instructions[:36]}\n".encode('utf-8')
 
     buf += divider.encode('ascii') + b"\n"
     buf += f"Subtotal:    Rs. {receipt.subtotal:.2f}\n".encode('ascii')
@@ -296,6 +300,8 @@ def format_guest_bill_ticket(order, printed_by=None, discount_amount=None, coupo
     for it in active_items:
         name = it.product_name[:21]
         lines.append(f"{name:<22} {it.quantity:>4} {it.unit_price:>6.2f} {it.line_total:>8.2f}")
+        if it.special_instructions:
+            lines.append(f"  * {it.special_instructions[:38]}")
 
     lines.append(divider)
     subtotal = order.subtotal
@@ -351,6 +357,8 @@ def format_guest_bill_ticket(order, printed_by=None, discount_amount=None, coupo
 
     for it in active_items:
         buf += f"{it.product_name[:20]:<20} {it.quantity:>3}x {it.line_total:>8.2f}\n".encode('utf-8')
+        if it.special_instructions:
+            buf += f"  * {it.special_instructions[:36]}\n".encode('utf-8')
 
     buf += divider.encode('ascii') + b"\n"
     buf += f"Subtotal:    Rs. {subtotal:.2f}\n".encode('ascii')

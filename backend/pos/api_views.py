@@ -12,7 +12,7 @@ from rest_framework import status
 from core.views import digest
 from core.models import Customer, Coupon, Redemption
 from .models import (
-    BusinessSettings, DiningTable, Category, Product,
+    BusinessSettings, DiningTable, Category, Product, ProductOptionGroup, ProductOption,
     TaxConfiguration, Discount, Order, OrderItem,
     PrinterConfiguration, PrintJob, Payment, Receipt, AuditLog
 )
@@ -68,10 +68,28 @@ def api_menu(request):
     cats = Category.objects.filter(is_active=True).prefetch_related('products').order_by('display_order', 'name')
     result = []
     for c in cats:
-        products = c.products.filter(is_active=True).order_by('name')
+        products = c.products.filter(is_active=True).prefetch_related('option_groups__options').order_by('name')
         prods_data = []
         for p in products:
             img_url = p.image.url if p.image else ''
+            groups_data = []
+            for g in p.option_groups.all():
+                opts_data = []
+                for opt in g.options.filter(is_available=True):
+                    opts_data.append({
+                        'id': opt.id,
+                        'name': opt.name,
+                        'price_modifier': str(opt.price_modifier),
+                        'is_default': opt.is_default
+                    })
+                groups_data.append({
+                    'id': g.id,
+                    'name': g.name,
+                    'selection_type': g.selection_type,
+                    'is_required': g.is_required,
+                    'options': opts_data
+                })
+
             prods_data.append({
                 'id': p.id,
                 'name': p.name,
@@ -80,7 +98,8 @@ def api_menu(request):
                 'image_url': img_url,
                 'is_available': p.is_available,
                 'category_id': c.id,
-                'category_name': c.name
+                'category_name': c.name,
+                'option_groups': groups_data
             })
         result.append({
             'id': c.id,
@@ -157,13 +176,31 @@ def api_order_create(request):
             if not product:
                 continue
 
+            option_ids = it.get('option_ids', [])
+            item_options = []
+            options_modifier = Decimal('0.00')
+            if option_ids:
+                item_options = list(ProductOption.objects.filter(id__in=option_ids, group__product=product).select_related('group'))
+                for opt in item_options:
+                    options_modifier += opt.price_modifier
+
+            unit_price = product.price + options_modifier
+
+            instructions_parts = []
+            if item_options:
+                opts_summary = ", ".join(opt.name for opt in item_options)
+                instructions_parts.append(f"[{opts_summary}]")
+            if note:
+                instructions_parts.append(note)
+            final_instructions = " ".join(instructions_parts).strip()
+
             order_item = OrderItem.objects.create(
                 order=order,
                 product=product,
                 product_name=product.name,
-                unit_price=product.price,
+                unit_price=unit_price,
                 quantity=qty,
-                special_instructions=note,
+                special_instructions=final_instructions,
                 batch_number=1,
                 status='ordered'
             )
@@ -251,13 +288,31 @@ def api_order_add_items(request):
             if not product:
                 continue
 
+            option_ids = it.get('option_ids', [])
+            item_options = []
+            options_modifier = Decimal('0.00')
+            if option_ids:
+                item_options = list(ProductOption.objects.filter(id__in=option_ids, group__product=product).select_related('group'))
+                for opt in item_options:
+                    options_modifier += opt.price_modifier
+
+            unit_price = product.price + options_modifier
+
+            instructions_parts = []
+            if item_options:
+                opts_summary = ", ".join(opt.name for opt in item_options)
+                instructions_parts.append(f"[{opts_summary}]")
+            if note:
+                instructions_parts.append(note)
+            final_instructions = " ".join(instructions_parts).strip()
+
             order_item = OrderItem.objects.create(
                 order=order,
                 product=product,
                 product_name=product.name,
-                unit_price=product.price,
+                unit_price=unit_price,
                 quantity=qty,
-                special_instructions=note,
+                special_instructions=final_instructions,
                 batch_number=new_batch,
                 status='ordered'
             )

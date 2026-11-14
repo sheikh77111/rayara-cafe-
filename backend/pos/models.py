@@ -108,6 +108,50 @@ class Product(models.Model):
         return f"{self.name} - ₹{self.price} ({status})"
 
 
+class ProductOptionGroup(models.Model):
+    """
+    Groups of modifiers/options for a food product (e.g. 'Bread', 'Size', 'Add-ons').
+    """
+    SELECTION_TYPE_CHOICES = [
+        ('single', 'Single Choice (Radio)'),
+        ('multiple', 'Multiple Choices (Checkbox)'),
+    ]
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='option_groups')
+    name = models.CharField(max_length=100, help_text='e.g. Bread, Size, Add-ons')
+    selection_type = models.CharField(max_length=20, choices=SELECTION_TYPE_CHOICES, default='single')
+    is_required = models.BooleanField(default=False)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+        verbose_name = 'Product Option Group'
+        verbose_name_plural = 'Product Option Groups'
+
+    def __str__(self):
+        return f"{self.product.name} - {self.name} ({self.get_selection_type_display()})"
+
+
+class ProductOption(models.Model):
+    """
+    Individual option choice within an option group (e.g. 'Rumali', 'Quarter', 'Extra Mayonnaise').
+    """
+    group = models.ForeignKey(ProductOptionGroup, on_delete=models.CASCADE, related_name='options')
+    name = models.CharField(max_length=100)
+    price_modifier = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), help_text='Added to product base price')
+    is_default = models.BooleanField(default=False)
+    is_available = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+        verbose_name = 'Product Option'
+        verbose_name_plural = 'Product Options'
+
+    def __str__(self):
+        mod = f"+₹{self.price_modifier}" if self.price_modifier > Decimal('0.00') else "Free"
+        return f"{self.group.name}: {self.name} ({mod})"
+
+
 class TaxConfiguration(models.Model):
     """
     Configurable legal taxes (CGST, SGST, VAT) editable by owner.

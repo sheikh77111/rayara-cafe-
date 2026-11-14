@@ -118,6 +118,60 @@
   .qty-btn:hover {
     background: var(--rayara-sand);
   }
+  .option-group-card {
+    background: #fdfaf6;
+    border: 1px solid var(--rayara-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .option-choice-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border: 1.5px solid var(--rayara-border);
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-bottom: 6px;
+    user-select: none;
+  }
+  .option-choice-item:hover {
+    background: #fbf7f0;
+    border-color: var(--rayara-amber);
+  }
+  .option-choice-item.selected {
+    background: #fdf5ea;
+    border-color: var(--rayara-amber);
+    box-shadow: 0 2px 6px rgba(229, 154, 56, 0.2);
+  }
+  .free-badge {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .mod-badge {
+    background-color: #fff3e0;
+    color: #e65100;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .options-tag {
+    background-color: #fff8e1;
+    color: #b78103;
+    border: 1px solid #ffe082;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-weight: 700;
+  }
 </style>
 {% endblock %}
 
@@ -266,6 +320,41 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Product Customization Modal -->
+<div class="modal fade" id="customizationModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header border-bottom" style="background: var(--rayara-sand-card);">
+        <div>
+          <span class="badge bg-secondary mb-1" id="cust-modal-category">Category</span>
+          <h5 class="modal-title fw-bold text-dark" id="cust-modal-title">Product Name</h5>
+          <small class="text-muted" id="cust-modal-desc">Base price: ₹0.00</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3" id="cust-modal-body">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="px-3 pb-2">
+        <label class="form-label small fw-bold text-secondary mb-1"><i class="bi bi-chat-left-text me-1"></i> Special Instructions (Optional)</label>
+        <input type="text" id="cust-special-note" class="form-control form-control-sm" placeholder="e.g. Extra spicy, less oil, pack separately">
+      </div>
+      <div class="modal-footer border-top bg-light d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <span class="qty-btn" onclick="adjustCustQty(-1)">-</span>
+          <span class="fw-bold px-2 fs-6" id="cust-qty-display">1</span>
+          <span class="qty-btn" onclick="adjustCustQty(1)">+</span>
+        </div>
+        <button type="button" class="btn btn-warning px-4 py-2 fw-bold d-flex align-items-center gap-2 rounded-3 shadow-sm"
+                id="cust-modal-submit-btn" onclick="confirmCustomizationAndAdd()" style="background-color: #e59a38; border: none; color: #1c100a;">
+          <i class="bi bi-cart-plus-fill fs-5"></i>
+          <span>Add to Cart · <span id="cust-modal-price-btn">₹0.00</span></span>
+        </button>
       </div>
     </div>
   </div>
@@ -438,6 +527,17 @@
     renderProducts();
   }
 
+  function getCategoryIcon(catName) {
+    const n = (catName || '').toLowerCase();
+    if (n.includes('shawarma') || n.includes('alfaham') || n.includes('shawaya')) return 'bi-fire';
+    if (n.includes('momos') || n.includes('snack') || n.includes('fries')) return 'bi-egg-fried';
+    if (n.includes('tea') || n.includes('coffee')) return 'bi-cup-hot-fill';
+    if (n.includes('juice')) return 'bi-cup-straw';
+    if (n.includes('shake')) return 'bi-snow2';
+    if (n.includes('drink') || n.includes('water')) return 'bi-droplet-fill';
+    return 'bi-egg-fried';
+  }
+
   function renderProducts() {
     const row = document.getElementById('products-row');
     let allProducts = [];
@@ -463,23 +563,31 @@
     row.innerHTML = allProducts.map(p => {
       const price = parseFloat(p.price).toFixed(2);
       const isAvailable = p.is_available;
+      const hasOptions = p.option_groups && p.option_groups.length > 0;
+      const catIcon = getCategoryIcon(p.category_name);
       const imgHtml = p.image_url
         ? `<img src="${p.image_url}" class="food-card-img w-100" alt="${p.name}">`
-        : `<div class="food-card-img"><i class="bi bi-egg-fried"></i></div>`;
+        : `<div class="food-card-img"><i class="bi ${catIcon}"></i></div>`;
 
       return `
         <div class="col-sm-6 col-md-4 col-xl-3">
-          <div class="food-card ${!isAvailable ? 'unavailable' : ''}" onclick="if(${isAvailable}) addToCart(${p.id}, '${escapeHtml(p.name)}', ${p.price})" style="cursor: pointer;">
+          <div class="food-card position-relative ${!isAvailable ? 'unavailable' : ''}" onclick="if(${isAvailable}) handleProductClick(${p.id})" style="cursor: pointer;">
+            ${hasOptions ? `<span class="options-tag position-absolute top-0 end-0 m-2 shadow-sm"><i class="bi bi-sliders me-1"></i>Options</span>` : ''}
             ${imgHtml}
             <div class="p-2 d-flex flex-column flex-grow-1">
               <span class="text-muted" style="font-size: 11px;">${p.category_name}</span>
               <h6 class="fw-bold mb-1 text-dark text-truncate" title="${p.name}">${p.name}</h6>
               <div class="d-flex justify-content-between align-items-center mt-auto pt-2">
-                <span class="fw-bold" style="color: var(--rayara-bronze);">₹${price}</span>
+                <span class="fw-bold" style="color: var(--rayara-bronze);">₹${price}${hasOptions ? '<small class="text-muted fw-normal" style="font-size: 10px;"> on</small>' : ''}</span>
                 ${isAvailable
-                  ? `<button class="btn btn-sm btn-rayara-primary py-1 px-2.5 rounded-pill" onclick="event.stopPropagation(); addToCart(${p.id}, '${escapeHtml(p.name)}', ${p.price})">
-                       <i class="bi bi-plus-lg"></i> Add
-                     </button>`
+                  ? (hasOptions
+                      ? `<button class="btn btn-sm btn-outline-warning py-1 px-2.5 rounded-pill" onclick="event.stopPropagation(); handleProductClick(${p.id})">
+                           <i class="bi bi-sliders"></i> Options
+                         </button>`
+                      : `<button class="btn btn-sm btn-rayara-primary py-1 px-2.5 rounded-pill" onclick="event.stopPropagation(); handleProductClick(${p.id})">
+                           <i class="bi bi-plus-lg"></i> Add
+                         </button>`
+                    )
                   : `<span class="badge bg-secondary">Out of Stock</span>`
                 }
               </div>
@@ -490,26 +598,285 @@
     }).join('');
   }
 
-  function addToCart(id, name, price) {
-    if (!state.cart[id]) {
-      state.cart[id] = { id, name, price: parseFloat(price), qty: 1, notes: '' };
+  // --- Product Customization Modal State & Handlers ---
+  let custState = {
+    product: null,
+    basePrice: 0,
+    qty: 1,
+    selectedSingle: {},   // groupId -> optionId
+    selectedMultiple: {}, // groupId -> Set of optionIds
+  };
+
+  function findProductById(prodId) {
+    for (const cat of state.menuData) {
+      for (const p of cat.products) {
+        if (p.id == prodId) return p;
+      }
+    }
+    return null;
+  }
+
+  function handleProductClick(prodId) {
+    const prod = findProductById(prodId);
+    if (!prod) return;
+
+    if (prod.option_groups && prod.option_groups.length > 0) {
+      openCustomizationModal(prod);
     } else {
-      state.cart[id].qty += 1;
+      addToCartDirect(prod);
+    }
+  }
+
+  function addToCartDirect(p) {
+    const key = `p_${p.id}`;
+    if (!state.cart[key]) {
+      state.cart[key] = {
+        key: key,
+        productId: p.id,
+        name: p.name,
+        price: parseFloat(p.price),
+        qty: 1,
+        notes: '',
+        optionIds: [],
+        optionsSummary: ''
+      };
+    } else {
+      state.cart[key].qty += 1;
     }
     renderCart();
   }
 
-  function changeQty(id, delta) {
-    if (!state.cart[id]) return;
-    state.cart[id].qty += delta;
-    if (state.cart[id].qty <= 0) {
-      delete state.cart[id];
+  function openCustomizationModal(prod) {
+    custState.product = prod;
+    custState.basePrice = parseFloat(prod.price);
+    custState.qty = 1;
+    custState.selectedSingle = {};
+    custState.selectedMultiple = {};
+
+    document.getElementById('cust-modal-category').innerText = prod.category_name;
+    document.getElementById('cust-modal-title').innerText = prod.name;
+    document.getElementById('cust-modal-desc').innerText = prod.description || `Base price: ₹${custState.basePrice.toFixed(2)}`;
+    document.getElementById('cust-special-note').value = '';
+    document.getElementById('cust-qty-display').innerText = '1';
+
+    // Set defaults:
+    prod.option_groups.forEach(group => {
+      if (group.selection_type === 'single') {
+        const defaultOpt = group.options.find(o => o.is_default) || group.options[0];
+        if (defaultOpt) {
+          custState.selectedSingle[group.id] = defaultOpt.id;
+        }
+      } else {
+        const defaults = group.options.filter(o => o.is_default).map(o => o.id);
+        custState.selectedMultiple[group.id] = new Set(defaults);
+      }
+    });
+
+    renderCustomizationModalBody();
+    updateCustModalPrice();
+
+    const modal = new bootstrap.Modal(document.getElementById('customizationModal'));
+    modal.show();
+  }
+
+  function renderCustomizationModalBody() {
+    const body = document.getElementById('cust-modal-body');
+    const prod = custState.product;
+    if (!prod) return;
+
+    let html = '';
+    prod.option_groups.forEach(group => {
+      const isSingle = group.selection_type === 'single';
+      const reqBadge = group.is_required
+        ? `<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size: 10px;">Required</span>`
+        : `<span class="badge bg-secondary-subtle text-secondary" style="font-size: 10px;">Optional</span>`;
+
+      html += `
+        <div class="option-group-card mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong class="text-dark fs-6">${group.name}</strong>
+            ${reqBadge}
+          </div>
+          <div class="option-choices-list">
+      `;
+
+      group.options.forEach(opt => {
+        const mod = parseFloat(opt.price_modifier);
+        const isFree = mod === 0;
+        const modBadge = isFree
+          ? `<span class="free-badge">FREE</span>`
+          : `<span class="mod-badge">+₹${mod.toFixed(2)}</span>`;
+
+        if (isSingle) {
+          const isSelected = custState.selectedSingle[group.id] === opt.id;
+          html += `
+            <div class="option-choice-item ${isSelected ? 'selected' : ''}" onclick="selectCustSingle(${group.id}, ${opt.id})">
+              <div class="d-flex align-items-center gap-2">
+                <input class="form-check-input mt-0" type="radio" name="opt_group_${group.id}" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); selectCustSingle(${group.id}, ${opt.id})">
+                <span class="fw-semibold text-dark">${opt.name}</span>
+              </div>
+              <div>${modBadge}</div>
+            </div>
+          `;
+        } else {
+          const isSelected = custState.selectedMultiple[group.id] && custState.selectedMultiple[group.id].has(opt.id);
+          html += `
+            <div class="option-choice-item ${isSelected ? 'selected' : ''}" onclick="toggleCustMultiple(${group.id}, ${opt.id})">
+              <div class="d-flex align-items-center gap-2">
+                <input class="form-check-input mt-0" type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCustMultiple(${group.id}, ${opt.id})">
+                <span class="fw-semibold text-dark">${opt.name}</span>
+              </div>
+              <div>${modBadge}</div>
+            </div>
+          `;
+        }
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    });
+
+    body.innerHTML = html;
+  }
+
+  function selectCustSingle(groupId, optId) {
+    custState.selectedSingle[groupId] = optId;
+    renderCustomizationModalBody();
+    updateCustModalPrice();
+  }
+
+  function toggleCustMultiple(groupId, optId) {
+    if (!custState.selectedMultiple[groupId]) {
+      custState.selectedMultiple[groupId] = new Set();
+    }
+    const set = custState.selectedMultiple[groupId];
+    if (set.has(optId)) {
+      set.delete(optId);
+    } else {
+      set.add(optId);
+    }
+    renderCustomizationModalBody();
+    updateCustModalPrice();
+  }
+
+  function adjustCustQty(delta) {
+    custState.qty = Math.max(1, custState.qty + delta);
+    document.getElementById('cust-qty-display').innerText = custState.qty;
+    updateCustModalPrice();
+  }
+
+  function calculateCustUnitPrice() {
+    let unit = custState.basePrice;
+    const prod = custState.product;
+    if (!prod) return unit;
+
+    prod.option_groups.forEach(g => {
+      if (g.selection_type === 'single') {
+        const optId = custState.selectedSingle[g.id];
+        const opt = g.options.find(o => o.id === optId);
+        if (opt) unit += parseFloat(opt.price_modifier);
+      } else {
+        const set = custState.selectedMultiple[g.id];
+        if (set) {
+          set.forEach(optId => {
+            const opt = g.options.find(o => o.id === optId);
+            if (opt) unit += parseFloat(opt.price_modifier);
+          });
+        }
+      }
+    });
+
+    return unit;
+  }
+
+  function updateCustModalPrice() {
+    const unit = calculateCustUnitPrice();
+    const total = unit * custState.qty;
+    document.getElementById('cust-modal-price-btn').innerText = `₹${total.toFixed(2)}`;
+  }
+
+  function confirmCustomizationAndAdd() {
+    const prod = custState.product;
+    if (!prod) return;
+
+    // Validate required groups
+    for (const group of prod.option_groups) {
+      if (group.is_required && group.selection_type === 'single') {
+        if (!custState.selectedSingle[group.id]) {
+          alert(`Please select an option for ${group.name}.`);
+          return;
+        }
+      }
+    }
+
+    const selectedOptIds = [];
+    const selectedOptNames = [];
+    let totalModifier = 0;
+
+    prod.option_groups.forEach(g => {
+      if (g.selection_type === 'single') {
+        const optId = custState.selectedSingle[g.id];
+        const opt = g.options.find(o => o.id === optId);
+        if (opt) {
+          selectedOptIds.push(opt.id);
+          selectedOptNames.push(opt.name);
+          totalModifier += parseFloat(opt.price_modifier);
+        }
+      } else {
+        const set = custState.selectedMultiple[g.id];
+        if (set) {
+          set.forEach(optId => {
+            const opt = g.options.find(o => o.id === optId);
+            if (opt) {
+              selectedOptIds.push(opt.id);
+              selectedOptNames.push(opt.name);
+              totalModifier += parseFloat(opt.price_modifier);
+            }
+          });
+        }
+      }
+    });
+
+    const userNote = document.getElementById('cust-special-note').value.trim();
+    selectedOptIds.sort((a, b) => a - b);
+
+    // Unique cart key by product + sorted options + user note
+    const itemKey = `p_${prod.id}_opts_${selectedOptIds.join('_')}_${userNote.replace(/\s+/g, '')}`;
+    const unitPrice = custState.basePrice + totalModifier;
+    const summary = selectedOptNames.join(' · ');
+
+    if (state.cart[itemKey]) {
+      state.cart[itemKey].qty += custState.qty;
+    } else {
+      state.cart[itemKey] = {
+        key: itemKey,
+        productId: prod.id,
+        name: prod.name,
+        price: unitPrice,
+        qty: custState.qty,
+        notes: userNote,
+        optionIds: selectedOptIds,
+        optionsSummary: summary
+      };
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('customizationModal')).hide();
+    renderCart();
+  }
+
+  function changeQty(key, delta) {
+    if (!state.cart[key]) return;
+    state.cart[key].qty += delta;
+    if (state.cart[key].qty <= 0) {
+      delete state.cart[key];
     }
     renderCart();
   }
 
-  function removeFromCart(id) {
-    delete state.cart[id];
+  function removeFromCart(key) {
+    delete state.cart[key];
     renderCart();
   }
 
@@ -518,9 +885,9 @@
     renderCart();
   }
 
-  function openNoteModal(id) {
-    state.activeEditingItemId = id;
-    const it = state.cart[id];
+  function openNoteModal(key) {
+    state.activeEditingItemId = key;
+    const it = state.cart[key];
     document.getElementById('note-modal-title').innerText = `Notes for ${it.name}`;
     document.getElementById('note-input').value = it.notes || '';
     const modal = new bootstrap.Modal(document.getElementById('noteModal'));
@@ -574,25 +941,31 @@
       return `
         <div class="cart-item-row">
           <div class="d-flex justify-content-between align-items-start">
-            <div class="fw-semibold text-dark text-truncate" style="max-width: 170px;">${it.name}</div>
-            <div class="fw-bold text-dark">₹${lineTotal}</div>
+            <div style="max-width: 175px;">
+              <div class="fw-semibold text-dark text-truncate">${escapeHtml(it.name)}</div>
+              ${it.optionsSummary ? `<div class="text-muted" style="font-size: 11px; line-height: 1.2;">[${escapeHtml(it.optionsSummary)}]</div>` : ''}
+            </div>
+            <div class="text-end">
+              <div class="fw-bold text-dark">₹${lineTotal}</div>
+              <small class="text-muted" style="font-size: 10px;">₹${it.price.toFixed(2)} ea</small>
+            </div>
           </div>
           <div class="d-flex justify-content-between align-items-center mt-2">
             <div class="d-flex align-items-center gap-2">
-              <span class="qty-btn" onclick="changeQty(${it.id}, -1)">-</span>
+              <span class="qty-btn" onclick="changeQty('${it.key}', -1)">-</span>
               <span class="fw-bold px-1">${it.qty}</span>
-              <span class="qty-btn" onclick="changeQty(${it.id}, 1)">+</span>
+              <span class="qty-btn" onclick="changeQty('${it.key}', 1)">+</span>
             </div>
             <div class="d-flex align-items-center gap-2">
-              <button class="btn btn-sm btn-link p-0 text-decoration-none text-muted" onclick="openNoteModal(${it.id})" title="Special instruction">
+              <button class="btn btn-sm btn-link p-0 text-decoration-none text-muted" onclick="openNoteModal('${it.key}')" title="Special instruction">
                 <i class="bi bi-chat-text"></i> ${it.notes ? '<span class="badge bg-warning text-dark">Note</span>' : '<span class="small">Note</span>'}
               </button>
-              <button class="btn btn-sm btn-link p-0 text-danger" onclick="removeFromCart(${it.id})">
+              <button class="btn btn-sm btn-link p-0 text-danger" onclick="removeFromCart('${it.key}')">
                 <i class="bi bi-x-circle"></i>
               </button>
             </div>
           </div>
-          ${it.notes ? `<div class="small text-muted mt-1 fst-italic">Note: ${it.notes}</div>` : ''}
+          ${it.notes ? `<div class="small text-muted mt-1 fst-italic">Note: ${escapeHtml(it.notes)}</div>` : ''}
         </div>
       `;
     }).join('');
@@ -630,9 +1003,10 @@
       let payload = {
         order_type: state.orderType,
         items: items.map(it => ({
-          product_id: it.id,
+          product_id: it.productId,
           quantity: it.qty,
-          special_instructions: it.notes
+          option_ids: it.optionIds || [],
+          special_instructions: it.notes || ''
         }))
       };
 

@@ -4,7 +4,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User
 from pos.models import (
-    BusinessSettings, DiningTable, Category, Product,
+    BusinessSettings, DiningTable, Category, Product, ProductOptionGroup, ProductOption,
     TaxConfiguration, Discount, Order, OrderItem,
     PrinterConfiguration, PrintJob, Payment, Receipt, AuditLog
 )
@@ -1107,3 +1107,175 @@ class Phase13KitchenDisplaySystemTests(TestCase):
         order.refresh_from_db()
         self.assertFalse(order.is_paid)
         self.assertEqual(table.get_active_order(), order)
+
+
+class Phase14ProductOptionsAndCategoriesTests(TestCase):
+    """
+    Tests for Category & Product Option Architecture, Free Mayonnaise/Dips,
+    Dynamic Modifiers, KOT Generation, and Pre-Payment Table Bill Printing.
+    """
+    def setUp(self):
+        self.client = Client()
+        self.staff_user = User.objects.create_user(username='staff_opt', password='staffpassword', is_staff=True)
+        self.client.login(username='staff_opt', password='staffpassword')
+
+        # Create Category & Product
+        self.cat_shawarma = Category.objects.create(name='Shawarma', display_order=1)
+        self.prod_shawarma = Product.objects.create(
+            category=self.cat_shawarma,
+            name='Normal Chicken Shawarma',
+            price=Decimal('110.00'),
+            is_available=True
+        )
+
+        # Bread Option Group (Single, Required)
+        self.grp_bread = ProductOptionGroup.objects.create(
+            product=self.prod_shawarma,
+            name='Choose Bread',
+            selection_type='single',
+            is_required=True,
+            display_order=1
+        )
+        self.opt_rumali = ProductOption.objects.create(
+            group=self.grp_bread,
+            name='Rumali',
+            price_modifier=Decimal('0.00'),
+            is_default=True
+        )
+        self.opt_kuboos = ProductOption.objects.create(
+            group=self.grp_bread,
+            name='Kuboos',
+            price_modifier=Decimal('0.00'),
+            is_default=False
+        )
+
+        # Customizations Group (Multiple, Free Mayo/Dip + Extra Chicken)
+        self.grp_addons = ProductOptionGroup.objects.create(
+            product=self.prod_shawarma,
+            name='Customizations',
+            selection_type='multiple',
+            is_required=False,
+            display_order=2
+        )
+        self.opt_mayo = ProductOption.objects.create(
+            group=self.grp_addons,
+            name='Extra Mayonnaise',
+            price_modifier=Decimal('0.00')  # User strictly specified: FREE!
+        )
+        self.opt_chicken = ProductOption.objects.create(
+            group=self.grp_addons,
+            name='Extra Chicken',
+            price_modifier=Decimal('35.00')
+        )
+
+        self.table = DiningTable.objects.create(number='T5', capacity=4, status='available')
+
+    def test_menu_api_returns_options_with_free_mayo(self):
+        """api_menu returns product option groups with 0.00 modifier for mayonnaise."""
+        resp = self.client.get(reverse('pos:api_menu'))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        shawarma_cat = next((c for c in data if c['name'] == 'Shawarma'), None)
+        self.assertIsNotNone(shawarma_cat)
+
+        prod = next((p for p in shawarma_cat['products'] if p['id'] == self.prod_shawarma.id), None)
+        self.assertIsNotNone(prod)
+        self.assertEqual(len(prod['option_groups']), 2)
+
+        addons_group = next((g for g in prod['option_groups'] if g['name'] == 'Customizations'), None)
+        self.assertIsNotNone(addons_group)
+        mayo_opt = next((o for o in addons_group['options'] if 'Mayonnaise' in o['name']), None)
+        self.assertIsNotNone(mayo_opt)
+        self.assertEqual(Decimal(mayo_opt['price_modifier']), Decimal('0.00'))
+
+    def test_order_creation_calculates_price_with_options_and_free_mayo(self):
+        """Order created with options accurately computes line total (110 + 0 + 0 + 35 = 145)."""
+        payload = {
+            'order_type': 'dine_in',
+            'table_number': 'T5',
+            'items': [
+                {
+                    'product_id': self.prod_shawarma.id,
+                    'quantity': 2,
+                    'option_ids': [self.opt_kuboos.id, self.opt_mayo.id, self.opt_chicken.id],
+                    'special_instructions': 'Well toasted'
+                }
+            ]
+        }
+        resp = self.client.post(
+            reverse('pos:api_order_create'),
+            data=payload,
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertTrue(data['success'])
+
+        order = Order.objects.get(id=data['order_id'])
+        self.assertEqual(order.items.count(), 1)
+        item = order.items.first()
+
+        # Unit price = 110.00 + 35.00 = 145.00 (mayo and kuboos are 0.00)
+        self.assertEqual(item.unit_price, Decimal('145.00'))
+        # Line total = 145.00 * 2 = 290.00
+        self.assertEqual(item.line_total, Decimal('290.00'))
+
+        # Instructions contains option names and user note
+        self.assertIn('Kuboos', item.special_instructions)
+        self.assertIn('Extra Mayonnaise', item.special_instructions)
+        self.assertIn('Extra Chicken', item.special_instructions)
+        self.assertIn('Well toasted', item.special_instructions)
+
+        # KOT PrintJob verified
+        job = PrintJob.objects.filter(order=order, job_type='new_order').first()
+        self.assertIsNotNone(job)
+        self.assertIn('Normal Chicken Shawarma', job.content)
+        self.assertIn('Extra Mayonnaise', job.content)
+
+    def test_add_items_batch2_with_options(self):
+        """Adding batch 2 items with portion options calculates modifier and tags batch #2."""
+        order = Order.objects.create(
+            order_number='D-OPT-ADD',
+            order_type='dine_in',
+            table=self.table,
+            created_by=self.staff_user,
+            current_batch=1
+        )
+        OrderItem.objects.create(
+            order=order, product=self.prod_shawarma, product_name=self.prod_shawarma.name,
+            unit_price=self.prod_shawarma.price, quantity=1, batch_number=1
+        )
+        order.recalculate_totals()
+
+        payload = {
+            'order_id': order.id,
+            'items': [
+                {
+                    'product_id': self.prod_shawarma.id,
+                    'quantity': 1,
+                    'option_ids': [self.opt_rumali.id, self.opt_mayo.id],
+                    'special_instructions': 'Quick please'
+                }
+            ]
+        }
+        resp = self.client.post(
+            reverse('pos:api_order_add_items'),
+            data=payload,
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.current_batch, 2)
+        self.assertEqual(order.items.count(), 2)
+
+        new_item = order.items.filter(batch_number=2).first()
+        self.assertEqual(new_item.unit_price, Decimal('110.00'))
+        self.assertIn('Rumali', new_item.special_instructions)
+        self.assertIn('Extra Mayonnaise', new_item.special_instructions)
+
+        # Add-on KOT PrintJob verified
+        add_job = PrintJob.objects.filter(order=order, job_type='additional_order').first()
+        self.assertIsNotNone(add_job)
+        self.assertIn('BATCH #2', add_job.content)
+        self.assertIn('Extra Mayonnaise', add_job.content)
+

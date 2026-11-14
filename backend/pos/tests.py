@@ -1057,3 +1057,53 @@ class Phase13KitchenDisplaySystemTests(TestCase):
         self.assertEqual(resp_comp.status_code, 200)
         order.refresh_from_db()
         self.assertEqual(order.status, 'completed')
+
+    def test_print_guest_table_bill_before_payment(self):
+        """
+        Verify that staff can print a pre-settlement table bill / guest check
+        to give to diners at the table before payment settlement.
+        """
+        table = DiningTable.objects.create(number='T88', capacity=4, status='occupied')
+        order = Order.objects.create(
+            order_number=Order.generate_next_order_number('dine_in'),
+            order_type='dine_in',
+            table=table,
+            created_by=self.waiter_user,
+            status='completed',
+            is_paid=False,
+            subtotal=Decimal('300.00'),
+            tax_amount=Decimal('15.00'),
+            grand_total=Decimal('315.00')
+        )
+        OrderItem.objects.create(
+            order=order,
+            product=self.shawarma,
+            product_name=self.shawarma.name,
+            unit_price=Decimal('150.00'),
+            quantity=2,
+            line_total=Decimal('300.00'),
+            status='served'
+        )
+
+        resp = self.w_client.post(
+            reverse('pos:api_print_guest_bill'),
+            data={'order_id': order.id},
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertIn('GUEST TABLE BILL', data['text_preview'])
+        self.assertIn('Table T88', data['text_preview'])
+        self.assertIn('315.00', data['text_preview'])
+
+        # PrintJob verified
+        job = PrintJob.objects.get(id=data['job_id'])
+        self.assertEqual(job.job_type, 'guest_bill')
+        self.assertEqual(job.printer_type, 'billing')
+        self.assertEqual(job.status, 'printed')
+
+        # Order must remain unpaid and table still occupied until cashier takes payment
+        order.refresh_from_db()
+        self.assertFalse(order.is_paid)
+        self.assertEqual(table.get_active_order(), order)

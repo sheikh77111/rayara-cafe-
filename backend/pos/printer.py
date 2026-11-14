@@ -246,6 +246,133 @@ def format_receipt_ticket(receipt, is_reprint=False):
     return text_preview, bytes(buf)
 
 
+def format_guest_bill_ticket(order, printed_by=None, discount_amount=None, coupon_code=None):
+    """
+    Renders an 80mm thermal guest table check / pre-payment bill.
+    Used for presenting the bill to customers at their table before payment.
+    """
+    biz = BusinessSettings.get_settings()
+    width = 42
+    divider = '-' * width
+    double_divider = '=' * width
+
+    now_str = timezone.localtime(timezone.now()).strftime('%d-%b-%Y  %I:%M %p')
+    server_name = ""
+    if printed_by:
+        server_name = printed_by.get_full_name() or printed_by.username
+    elif order.created_by:
+        server_name = order.created_by.get_full_name() or order.created_by.username
+    else:
+        server_name = "Staff"
+
+    order_target = f"Table {order.table.number}" if order.order_type == 'dine_in' and order.table else "Takeaway"
+
+    lines = [
+        biz.cafe_name.center(width),
+        biz.tagline.center(width),
+        biz.address.center(width),
+        f"Phone: {biz.phone}".center(width),
+    ]
+    if biz.gst_number:
+        lines.append(f"GSTIN: {biz.gst_number}".center(width))
+    if biz.fssai_license:
+        lines.append(f"FSSAI Lic: {biz.fssai_license}".center(width))
+
+    lines.append(double_divider)
+    lines.append("*** GUEST TABLE BILL ***".center(width))
+    lines.append("[ PRE-PAYMENT ESTIMATE ]".center(width))
+    lines.append(double_divider)
+
+    lines.append(f"Order: {order.order_number:<16} {order_target:>20}")
+    lines.append(f"Server: {server_name:<15} {now_str:>21}")
+    if order.customer_name or order.customer_phone:
+        lines.append(f"Guest:  {order.customer_name or 'Valued Customer'} ({order.customer_phone or ''})")
+
+    lines.append(divider)
+    lines.append(f"{'ITEM':<22} {'QTY':>4} {'PRICE':>6} {'TOTAL':>8}")
+    lines.append(divider)
+
+    active_items = order.items.filter(is_cancelled=False)
+    for it in active_items:
+        name = it.product_name[:21]
+        lines.append(f"{name:<22} {it.quantity:>4} {it.unit_price:>6.2f} {it.line_total:>8.2f}")
+
+    lines.append(divider)
+    subtotal = order.subtotal
+    lines.append(f"{'Subtotal:':<30} {biz.currency_symbol} {subtotal:>9.2f}")
+
+    disc = Decimal('0.00')
+    if discount_amount is not None:
+        disc = Decimal(str(discount_amount))
+    elif order.discount_amount:
+        disc = order.discount_amount
+
+    if disc > Decimal('0.00'):
+        cc = coupon_code or order.coupon_code or 'Promo'
+        lines.append(f"Discount ({cc}):".ljust(30) + f"-{biz.currency_symbol} {disc:>9.2f}")
+
+    tax = order.tax_amount
+    if tax > Decimal('0.00'):
+        half_tax = (tax / Decimal('2.00')).quantize(Decimal('0.01'))
+        lines.append(f"{'CGST (2.5%):':<30} {biz.currency_symbol} {half_tax:>9.2f}")
+        lines.append(f"{'SGST (2.5%):':<30} {biz.currency_symbol} {half_tax:>9.2f}")
+
+    grand_total = max(Decimal('0.00'), subtotal - disc + tax)
+    lines.append(double_divider)
+    lines.append(f"{'TOTAL PAYABLE:':<28} {biz.currency_symbol} {grand_total:>11.2f}")
+    lines.append(double_divider)
+
+    lines.append("Please pay Cash, UPI, or Card at counter.".center(width))
+    lines.append("Thank you for dining with us!".center(width))
+    for fline in biz.receipt_footer_text.splitlines():
+        lines.append(fline.center(width))
+    lines.append(double_divider)
+
+    text_preview = "\n".join(lines)
+
+    # Build ESC/POS bytes
+    buf = bytearray()
+    buf += INIT_PRINTER
+    buf += ALIGN_CENTER
+    buf += BOLD_ON
+    buf += DOUBLE_SIZE
+    buf += f"{biz.cafe_name}\n".encode('utf-8')
+    buf += NORMAL_SIZE
+    buf += f"{biz.address}\n".encode('utf-8')
+    buf += f"Phone: {biz.phone}\n".encode('utf-8')
+    buf += BOLD_OFF
+    buf += double_divider.encode('ascii') + b"\n"
+    buf += b"*** GUEST TABLE BILL ***\n"
+    buf += b"[ PRE-PAYMENT ESTIMATE ]\n"
+    buf += ALIGN_LEFT
+    buf += f"Order: {order.order_number}   {order_target}\n".encode('utf-8')
+    buf += f"Server: {server_name}   {now_str}\n".encode('utf-8')
+    buf += divider.encode('ascii') + b"\n"
+
+    for it in active_items:
+        buf += f"{it.product_name[:20]:<20} {it.quantity:>3}x {it.line_total:>8.2f}\n".encode('utf-8')
+
+    buf += divider.encode('ascii') + b"\n"
+    buf += f"Subtotal:    Rs. {subtotal:.2f}\n".encode('ascii')
+    if disc > Decimal('0.00'):
+        buf += f"Discount:   -Rs. {disc:.2f}\n".encode('ascii')
+    if tax > Decimal('0.00'):
+        buf += f"Tax (5%):    Rs. {tax:.2f}\n".encode('ascii')
+    buf += BOLD_ON
+    buf += DOUBLE_HEIGHT
+    buf += f"TOTAL:       Rs. {grand_total:.2f}\n".encode('ascii')
+    buf += NORMAL_SIZE
+    buf += BOLD_OFF
+    buf += double_divider.encode('ascii') + b"\n"
+    buf += ALIGN_CENTER
+    buf += b"Please Pay Cash / UPI / Card\n"
+    buf += b"Thank You for Dining With Us!\n"
+    buf += FEED_LINE * 4
+    buf += CUT_PARTIAL
+
+    return text_preview, bytes(buf)
+
+
 def send_to_windows_spooler(printer_name: str, raw_bytes: bytes, job_title="Rayara Print Ticket") -> tuple[bool, str]:
     """
     Sends raw ESC/POS binary data to a Windows thermal printer driver (USB) via pywin32.
@@ -311,21 +438,23 @@ def dispatch_print_job(job: PrintJob) -> bool:
         msg = f"Simulated printer output saved to {filepath}"
     elif conn_type == 'usb_spooler':
         # Generate raw bytes from content or reformat
-        _, raw_bytes = (
-            format_receipt_ticket(job.order.receipt)
-            if job.job_type in ('bill_receipt', 'reprint_bill') and hasattr(job.order, 'receipt')
-            else format_kitchen_ticket(job.order, job.order.items.all(), job_type=job.job_type)
-        )
+        if job.job_type in ('bill_receipt', 'reprint_bill') and hasattr(job.order, 'receipt'):
+            _, raw_bytes = format_receipt_ticket(job.order.receipt)
+        elif job.job_type == 'guest_bill':
+            _, raw_bytes = format_guest_bill_ticket(job.order)
+        else:
+            _, raw_bytes = format_kitchen_ticket(job.order, job.order.items.all(), job_type=job.job_type)
         success, msg = send_to_windows_spooler(device, raw_bytes, f"Rayara-{job.id}")
         if not success:
             # Fall back to simulated write so restaurant workflow does not crash
             logger.warning(f"Fallback to simulation for job #{job.id}: {msg}")
     elif conn_type == 'ethernet':
-        _, raw_bytes = (
-            format_receipt_ticket(job.order.receipt)
-            if job.job_type in ('bill_receipt', 'reprint_bill') and hasattr(job.order, 'receipt')
-            else format_kitchen_ticket(job.order, job.order.items.all(), job_type=job.job_type)
-        )
+        if job.job_type in ('bill_receipt', 'reprint_bill') and hasattr(job.order, 'receipt'):
+            _, raw_bytes = format_receipt_ticket(job.order.receipt)
+        elif job.job_type == 'guest_bill':
+            _, raw_bytes = format_guest_bill_ticket(job.order)
+        else:
+            _, raw_bytes = format_kitchen_ticket(job.order, job.order.items.all(), job_type=job.job_type)
         success, msg = send_to_network_socket(device, port, raw_bytes)
     else:
         success = True

@@ -372,6 +372,7 @@ class PrintJob(models.Model):
         ('additional_order', 'Additional Kitchen Items'),
         ('cancelled_item', 'Cancelled Kitchen Items Ticket'),
         ('reprint_kitchen', 'Reprint Kitchen Order'),
+        ('guest_bill', 'Guest Table Bill / Estimate'),
         ('bill_receipt', 'Customer Bill Receipt'),
         ('reprint_bill', 'Reprint Customer Bill'),
     ]

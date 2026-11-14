@@ -18,7 +18,7 @@ from .models import (
 )
 from .permissions import is_owner, is_staff_member, IsOwnerUser, IsStaffOrOwnerUser
 from .printer import (
-    format_kitchen_ticket, format_receipt_ticket,
+    format_kitchen_ticket, format_receipt_ticket, format_guest_bill_ticket,
     dispatch_print_job
 )
 
@@ -868,6 +868,71 @@ def api_reprint_bill(request):
         'success': True,
         'message': f"Duplicate receipt for #{receipt.receipt_number} queued for printing.",
         'reprint_count': receipt.reprint_count
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsStaffOrOwnerUser])
+def api_print_guest_bill(request):
+    """
+    Prints or reprints a pre-payment table check (guest bill) to the TVS thermal printer.
+    Enables giving the bill to customers at the table before payment settlement.
+    """
+    order_id = request.data.get('order_id')
+    coupon_code = request.data.get('coupon_code', '').strip()
+    discount_amount = request.data.get('discount_amount')
+
+    if not order_id:
+        return Response({'error': 'Order ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    order = Order.objects.filter(id=order_id).prefetch_related('items', 'table').first()
+    if not order:
+        return Response({'error': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Calculate discount if provided
+    parsed_discount = None
+    if discount_amount is not None:
+        try:
+            parsed_discount = Decimal(str(discount_amount))
+        except Exception:
+            parsed_discount = None
+
+    ticket_text, _ = format_guest_bill_ticket(
+        order,
+        printed_by=request.user,
+        discount_amount=parsed_discount,
+        coupon_code=coupon_code
+    )
+
+    job = PrintJob.objects.create(
+        idempotency_key=f"GB-{order.order_number}-{uuid.uuid4().hex[:8]}",
+        printer_type='billing',
+        job_type='guest_bill',
+        order=order,
+        content=ticket_text
+    )
+    dispatch_print_job(job)
+
+    target = f"Table {order.table.number}" if order.table else "Takeaway"
+    AuditLog.objects.create(
+        user=request.user,
+        action='guest_bill_printed',
+        entity_type='order',
+        entity_id=str(order.id),
+        details=f"Guest Check printed for {target} (Order #{order.order_number})",
+        ip_address=request.META.get('REMOTE_ADDR', '')
+    )
+
+    return Response({
+        'success': True,
+        'message': f"Guest Table Bill sent to Thermal Printer for {target}!",
+        'order_id': order.id,
+        'order_number': order.order_number,
+        'table_number': order.table.number if order.table else None,
+        'job_id': job.id,
+        'job_status': job.status,
+        'text_preview': ticket_text,
+        'grand_total': str(order.grand_total)
     })
 
 

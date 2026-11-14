@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/billing/validate-coupon/', api_views.api_validate_coupon, name='api_validate_coupon'),
     path('api/billing/settle-payment/', api_views.api_settle_payment, name='api_settle_payment'),
     path('api/billing/reprint-bill/', api_views.api_reprint_bill, name='api_reprint_bill'),
+    path('api/billing/print-guest-bill/', api_views.api_print_guest_bill, name='api_print_guest_bill'),
 
     # Customer Digital Bills
     path('api/customer/bills/', api_views.api_customer_bills, name='api_customer_bills'),

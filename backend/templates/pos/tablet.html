@@ -717,9 +717,14 @@
             <td><strong>₹${parseFloat(o.grand_total).toFixed(2)}</strong></td>
             <td><span class="badge bg-warning text-dark">${o.status.toUpperCase()}</span></td>
             <td>
-              <button class="btn btn-sm btn-outline-primary py-0" onclick="selectExistingOrder(${o.id}, '${o.table_number || ''}')">
-                Add Items
-              </button>
+              <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-primary py-0" onclick="selectExistingOrder(${o.id}, '${o.table_number || ''}')">
+                  Add Items
+                </button>
+                <button class="btn btn-sm btn-outline-dark py-0 fw-bold" onclick="tabletPrintGuestBill(${o.id}, '${target}')" title="Print Table Bill on Counter Thermal Printer">
+                  <i class="bi bi-printer-fill text-warning me-1"></i> Print Bill
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -737,6 +742,30 @@
       state.existingOrderId = orderId;
       setOrderType('takeaway');
       updateCartTargetTitle(`Takeaway (Add-on Order #${orderId})`);
+    }
+  }
+
+  async function tabletPrintGuestBill(orderId, target) {
+    if (!confirm(`Send Guest Table Bill for ${target} to Counter Thermal Printer?`)) return;
+    try {
+      const res = await fetch('/pos/api/billing/print-guest-bill/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ order_id: orderId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`🖨️ ${data.message || 'Table Bill sent to Thermal Printer!'}\nYou can collect the print from the counter.`);
+      } else {
+        alert("Print Error: " + (data.error || "Could not print bill."));
+      }
+    } catch(err) {
+      console.error(err);
+      alert("Network error: Could not reach thermal printer.");
     }
   }
 

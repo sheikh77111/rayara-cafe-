@@ -184,6 +184,26 @@
             </div>
           </div>
 
+          <!-- TABLE GUEST BILL / PRE-PAYMENT CHECK BUTTON -->
+          <div class="card p-3 mb-3 border-dark border-opacity-25" style="background-color: #faf7f2; border-radius: 14px;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <span class="fw-bold small text-dark"><i class="bi bi-receipt-cutoff me-1 text-warning"></i> Table Guest Bill (Print for Table)</span>
+                <div class="text-muted" style="font-size: 11px;">Print and present to guests at their table after eating before collecting payment.</div>
+              </div>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-dark flex-grow-1 py-2.5 fw-bold d-flex align-items-center justify-content-center gap-2 rounded-3 shadow-sm"
+                      id="btn-print-table-bill" onclick="printTableGuestBill()" type="button" style="background-color: #1c100a; border: 1px solid var(--rayara-amber);">
+                <i class="bi bi-printer-fill fs-5 text-warning"></i>
+                <span>🖨️ PRINT TABLE BILL (GUEST CHECK)</span>
+              </button>
+              <button class="btn btn-outline-secondary py-2.5 px-3 rounded-3" onclick="previewGuestBillModal()" type="button" title="Preview Bill Ticket">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+
           <!-- Payment Method Selector -->
           <div class="mb-3">
             <label class="form-label fw-bold small text-dark mb-2">Select Payment Method</label>
@@ -228,6 +248,33 @@
             <span>COMPLETE PAYMENT & PRINT RECEIPT</span>
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Table Guest Bill (Pre-Payment Check) Modal -->
+<div class="modal fade" id="guestBillModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white py-2">
+        <h6 class="modal-title small fw-bold text-warning">
+          <i class="bi bi-receipt-cutoff me-2"></i>Table Guest Bill (Pre-Payment Check)
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3 bg-light">
+        <div class="receipt-slip" id="guest-bill-preview-text">
+          <!-- Raw guest check preview text -->
+        </div>
+      </div>
+      <div class="modal-footer justify-content-between py-2">
+        <button type="button" class="btn btn-outline-dark btn-sm fw-bold" onclick="reprintGuestBillDialog()">
+          <i class="bi bi-printer-fill text-warning me-1"></i> Print to Thermal Printer
+        </button>
+        <button type="button" class="btn btn-rayara-primary btn-sm" data-bs-dismiss="modal">
+          Done
+        </button>
       </div>
     </div>
   </div>
@@ -461,8 +508,11 @@
             <span>${o.order_number} · ${itemsCount} items</span>
             <span>Batch #${o.current_batch}</span>
           </div>
-          <div>
-            ${statusBadge}
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <div>${statusBadge}</div>
+            <button class="btn btn-sm btn-outline-dark py-1 px-2.5 rounded-pill fw-bold" onclick="quickPrintTableBill(event, ${o.id})" title="Print Table Bill for Guests">
+              <i class="bi bi-printer-fill text-warning me-1"></i> Print Bill
+            </button>
           </div>
         </div>
       `;
@@ -732,6 +782,142 @@
     } catch (e) {
       console.error(e);
     }
+  }
+
+  // Print Table Guest Check (Pre-payment bill to give to diners at table)
+  async function printTableGuestBill() {
+    if (!billingState.selectedOrder) return;
+    executePrintGuestBill(billingState.selectedOrder.id);
+  }
+
+  async function quickPrintTableBill(e, orderId) {
+    if (e) e.stopPropagation();
+    executePrintGuestBill(orderId);
+  }
+
+  async function previewGuestBillModal() {
+    if (!billingState.selectedOrder) return;
+    executePrintGuestBill(billingState.selectedOrder.id, true);
+  }
+
+  async function executePrintGuestBill(orderId, previewOnly = false) {
+    const btn = document.getElementById('btn-print-table-bill');
+    if (btn && !previewOnly) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> Printing Table Bill...`;
+    }
+
+    try {
+      const payload = {
+        order_id: orderId,
+        coupon_code: billingState.appliedCoupon ? billingState.appliedCoupon.coupon_code : (document.getElementById('coupon-code-input')?.value.trim() || '')
+      };
+
+      const res = await fetch('/pos/api/billing/print-guest-bill/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF_TOKEN
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert("Print Error: " + (data.error || "Failed to print guest bill."));
+      } else {
+        document.getElementById('guest-bill-preview-text').innerText = data.text_preview;
+        new bootstrap.Modal(document.getElementById('guestBillModal')).show();
+
+        // Also trigger browser thermal print dialog
+        if (!previewOnly) {
+          triggerBrowserThermalPrint(data.text_preview, data.order_number);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network error: Could not reach thermal printer.");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-printer-fill fs-5 text-warning"></i> <span>🖨️ PRINT TABLE BILL (GUEST CHECK)</span>`;
+      }
+    }
+  }
+
+  function reprintGuestBillDialog() {
+    const text = document.getElementById('guest-bill-preview-text').innerText;
+    triggerBrowserThermalPrint(text, 'COPY');
+  }
+
+  // 80mm ESC/POS Thermal Print via browser print dialog
+  function triggerBrowserThermalPrint(ticketText, orderNumber) {
+    let printFrame = document.getElementById('thermal-print-frame');
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'thermal-print-frame';
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
+    }
+
+    const doc = printFrame.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Table Bill #${orderNumber}</title>
+        <style>
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
+          @media print {
+            body {
+              margin: 0;
+              padding: 6px;
+              width: 76mm;
+              font-family: 'Courier New', Courier, monospace;
+              font-size: 12px;
+              font-weight: bold;
+              line-height: 1.25;
+              color: #000;
+              white-space: pre-wrap;
+            }
+          }
+          body {
+            margin: 0;
+            padding: 6px;
+            width: 76mm;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 1.25;
+            color: #000;
+            white-space: pre-wrap;
+          }
+        </style>
+      </head>
+      <body>` + escapeHtml(ticketText) + `</body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      printFrame.contentWindow.focus();
+      printFrame.contentWindow.print();
+    }, 300);
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 </script>
 {% endblock %}

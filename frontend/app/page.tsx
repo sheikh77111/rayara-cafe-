@@ -45,8 +45,8 @@ interface PlayResult {
 }
 
 // Exactly 20 options matching Rayara Backlit Bronze & Travertine Theme:
-// 10 of 1% (Travertine Linen), 3 of 2% (Terracotta), 2 of Unlucky (Dark Espresso Bronze),
-// 1 of 5% (Olive), 1 of 8% (Bronze & Amber), 1 of 12% (Olive Leaf), 1 of 15% (Amber), 1 of 25% (Backlit Gold - Ultra Rare)
+// Below 10% (88% chance): 6 of 1% (35%), 4 of 2% (22%), 2 of 3% (12%), 1 of 5% (8%), 1 of 8% (6%), 1 of Unlucky (5%)
+// 10% & Above (12% chance): 1 of 10% (4%), 1 of 12% (3%), 1 of 15% (2%), 1 of 20% (1%), 1 of 25% ★ (2% Rare Jackpot)
 interface Slice {
   id: number;
   label: string;
@@ -59,23 +59,23 @@ interface Slice {
 const WHEEL_SLICES: Slice[] = [
   { id: 0, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
   { id: 1, label: '5%', value: 5, color: '#4e5d42', textColor: '#ffffff' }, // Mediterranean Olive
-  { id: 2, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
-  { id: 3, label: '2%', value: 2, color: '#9e6b52', textColor: '#ffffff' }, // Terracotta Clay
-  { id: 4, label: 'Unlucky', value: 0, color: '#1e1109', textColor: '#dfd2c0' }, // Dark Espresso
-  { id: 5, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
-  { id: 6, label: '8%', value: 8, color: '#382013', textColor: '#f5a623' }, // Deep Bronze & Amber
-  { id: 7, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
-  { id: 8, label: '2%', value: 2, color: '#9e6b52', textColor: '#ffffff' }, // Terracotta Clay
-  { id: 9, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
-  { id: 10, label: '25% ★', value: 25, color: '#e59a38', textColor: '#1c100a', isRare: true }, // BACKLIT GOLD (0.2%)
+  { id: 2, label: '2%', value: 2, color: '#9e6b52', textColor: '#ffffff' }, // Terracotta Clay
+  { id: 3, label: '8%', value: 8, color: '#382013', textColor: '#f5a623' }, // Deep Bronze & Amber
+  { id: 4, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
+  { id: 5, label: '3%', value: 3, color: '#b87556', textColor: '#ffffff' }, // Warm Terracotta
+  { id: 6, label: '12%', value: 12, color: '#5c6e4e', textColor: '#ffffff' }, // Olive Leaf
+  { id: 7, label: '2%', value: 2, color: '#9e6b52', textColor: '#ffffff' }, // Terracotta Clay
+  { id: 8, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
+  { id: 9, label: '10%', value: 10, color: '#634832', textColor: '#f5e6d3' }, // Rich Bronze
+  { id: 10, label: '25% ★', value: 25, color: '#e59a38', textColor: '#1c100a', isRare: true }, // Backlit Gold (2% Rare Jackpot)
   { id: 11, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
-  { id: 12, label: '12%', value: 12, color: '#5c6e4e', textColor: '#ffffff' }, // Olive Leaf
-  { id: 13, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
-  { id: 14, label: '2%', value: 2, color: '#9e6b52', textColor: '#ffffff' }, // Terracotta Clay
-  { id: 15, label: 'Unlucky', value: 0, color: '#1e1109', textColor: '#dfd2c0' }, // Dark Espresso
-  { id: 16, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
-  { id: 17, label: '15%', value: 15, color: '#d97d26', textColor: '#ffffff' }, // Radiant Amber
-  { id: 18, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
+  { id: 12, label: '2%', value: 2, color: '#9e6b52', textColor: '#ffffff' }, // Terracotta Clay
+  { id: 13, label: '15%', value: 15, color: '#d97d26', textColor: '#ffffff' }, // Radiant Amber
+  { id: 14, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
+  { id: 15, label: '3%', value: 3, color: '#b87556', textColor: '#ffffff' }, // Warm Terracotta
+  { id: 16, label: '20%', value: 20, color: '#c26514', textColor: '#ffffff' }, // Deep Amber
+  { id: 17, label: '2%', value: 2, color: '#9e6b52', textColor: '#ffffff' }, // Terracotta Clay
+  { id: 18, label: 'Unlucky', value: 0, color: '#1e1109', textColor: '#dfd2c0' }, // Dark Espresso (5%)
   { id: 19, label: '1%', value: 1, color: '#f7f1e8', textColor: '#2a1810' },
 ];
 
@@ -728,7 +728,7 @@ export default function Home() {
 
             <div className="grid gap-3 mt-5">
               {[
-                { key: 'spin', name: 'Lucky Spin (20 Options)', desc: '20 slices: 1%, 2%, 5%, 8%, 12%, 15%, 25% or Unlucky', icon: <RotateCw /> },
+                { key: 'spin', name: 'Lucky Spin (20 Options)', desc: '20 slices: 1%, 2%, 3%, 5%, 8%, 10%, 12%, 15%, 20%, 25% or Unlucky', icon: <RotateCw /> },
                 { key: 'scratch', name: 'Mystery Scratch', desc: 'Scratch the card to reveal your surprise', icon: <Sparkles /> },
                 { key: 'quiz', name: 'Rayara Food Quiz', desc: 'Answer a quick food question to win', icon: <Gift /> },
               ].map(g => (
@@ -751,13 +751,13 @@ export default function Home() {
 
             <div className="mt-6 bg-[#eee4d6] rounded-2xl p-4 text-xs text-stone-600 space-y-1">
               <p className="font-semibold text-stone-800 flex items-center gap-1">
-                <ShieldCheck size={14} className="text-wine" /> Wheel Probability & Rules
+                <ShieldCheck size={14} className="text-wine" /> Verified Wheel Probabilities
               </p>
               <p>
-                • <b>20 Total Options</b>: 10× 1%, 3× 2%, 2× Unlucky, 1× 5%, 1× 8%, 1× 12%, 1× 15%, 1× 25%.
+                • <b>Win Rates</b>: Below 10%: 88% chance (1%: 35%, 2%: 22%, 3%: 12%, 5%: 8%, 8%: 6%, Unlucky: 5%). 10% &amp; Above: 12% chance (10%: 4%, 12%: 3%, 15%: 2%, 20%: 1%, 25% ★: 2%).
               </p>
               <p>
-                • <b>25% is Ultra-Rare</b> (0.2% probability) across all games.
+                • <b>20 Total Slices</b>: 6× 1%, 4× 2%, 2× 3%, 1× 5%, 1× Unlucky, 1× 8%, 1× 10%, 1× 12%, 1× 15%, 1× 20%, 1× 25% ★ (Rare Jackpot).
               </p>
             </div>
           </section>

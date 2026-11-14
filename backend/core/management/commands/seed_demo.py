@@ -25,19 +25,22 @@ class Command(BaseCommand):
         for key, name in [('spin', 'Lucky Spin'), ('scratch', 'Mystery Scratch'), ('quiz', 'Food Quiz')]:
             Game.objects.get_or_create(key=key, defaults={'name': name})
 
-        # 3. Rewards configuration for the 20 spin options
-        # 10 slices of 1% (50%), 3 slices of 2% (24%), 2 slices of unlucky 0% (15%)
-        # 1 slice of 5% (5%), 1 slice of 8% (3%), 1 slice of 12% (1.8%), 1 slice of 15% (1.0%),
-        # 1 slice of 25% (0.2% - ultra rare)
+        # 3. Rewards configuration for the 20 spin options (Probabilities total 1000 = 100%)
+        # 25% jackpot: exactly 2% chance (20 weight)
+        # Below 10%: 88% chance (880 weight): 1%: 35%, 2%: 22%, 3%: 12%, 5%: 8%, 8%: 6%, Unlucky: 5%
+        # 10% and above: 12% chance (120 weight): 10%: 4%, 12%: 3%, 15%: 2%, 20%: 1%, 25%: 2%
         reward_config = [
-            (1, 500),   # 1% (10 slices on wheel)
-            (2, 240),   # 2% (3 slices on wheel)
-            (0, 150),   # Null/Unlucky (2 slices on wheel)
-            (5, 50),    # 5% (1 slice on wheel)
-            (8, 30),    # 8% (1 slice on wheel)
-            (12, 18),   # 12% (1 slice on wheel)
-            (15, 10),   # 15% (1 slice on wheel)
-            (25, 2),    # 25% (1 slice on wheel - ultra rare!)
+            (1, 350),   # 1% (35% probability)
+            (2, 220),   # 2% (22% probability)
+            (3, 120),   # 3% (12% probability)
+            (5, 80),    # 5% (8% probability)
+            (0, 50),    # Null/Unlucky (5% probability)
+            (8, 60),    # 8% (6% probability)
+            (10, 40),   # 10% (4% probability)
+            (12, 30),   # 12% (3% probability)
+            (15, 20),   # 15% (2% probability)
+            (20, 10),   # 20% (1% probability)
+            (25, 20),   # 25% (2% probability - rare jackpot!)
         ]
 
         # Reset existing rewards to match new 20-slice distribution

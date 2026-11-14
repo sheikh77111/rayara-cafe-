@@ -1039,11 +1039,9 @@
 
       if (!res.ok) {
         if (data.table_occupied && data.existing_order_id) {
-          if (confirm(`${data.error}\nWould you like to add these items to active order #${data.existing_order_id}?`)) {
-            state.existingOrderId = data.existing_order_id;
-            submitOrderToKitchen();
-            return;
-          }
+          // Table has an active unpaid order -> automatically add items to existing order
+          state.existingOrderId = data.existing_order_id;
+          return submitOrderToKitchen();
         } else {
           alert("Error: " + (data.error || "Failed to submit order."));
         }

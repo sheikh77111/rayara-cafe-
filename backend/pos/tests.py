@@ -1279,3 +1279,57 @@ class Phase14ProductOptionsAndCategoriesTests(TestCase):
         self.assertIn('BATCH #2', add_job.content)
         self.assertIn('Extra Mayonnaise', add_job.content)
 
+    def test_add_items_to_served_completed_order_resets_status_to_new(self):
+        """
+        When diners ask for additional food after their previous round was marked
+        'completed' (served) by the kitchen, staff can add items; order.status
+        resets to 'new' so it chimes and appears on the kitchen screen active queue.
+        """
+        order = Order.objects.create(
+            order_number='D-SERVED-ADD',
+            order_type='dine_in',
+            table=self.table,
+            created_by=self.staff_user,
+            status='completed',  # Food was served!
+            is_paid=False,       # But diners have NOT paid yet
+            current_batch=1
+        )
+        OrderItem.objects.create(
+            order=order, product=self.prod_shawarma, product_name=self.prod_shawarma.name,
+            unit_price=self.prod_shawarma.price, quantity=1, batch_number=1, status='served'
+        )
+        order.recalculate_totals()
+
+        payload = {
+            'order_id': order.id,
+            'items': [
+                {
+                    'product_id': self.prod_shawarma.id,
+                    'quantity': 2,
+                    'option_ids': [self.opt_kuboos.id, self.opt_mayo.id],
+                    'special_instructions': 'Second round of food'
+                }
+            ]
+        }
+        resp = self.client.post(
+            reverse('pos:api_order_add_items'),
+            data=payload,
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.current_batch, 2)
+        self.assertEqual(order.status, 'new')  # Must be 'new' so kitchen KDS displays it!
+        self.assertFalse(order.is_paid)
+
+        # Verify KDS query includes this order in active queue
+        resp_kds = self.client.get(reverse('pos:api_kitchen_orders') + '?include_completed=1')
+        self.assertEqual(resp_kds.status_code, 200)
+        data = resp_kds.json()
+        kds_ord = next((o for o in data['orders'] if o['id'] == order.id), None)
+        self.assertIsNotNone(kds_ord)
+        self.assertEqual(kds_ord['status'], 'new')
+        self.assertTrue(kds_ord['has_addons'])
+        self.assertEqual(kds_ord['current_batch'], 2)
+
+

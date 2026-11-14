@@ -270,12 +270,13 @@ def api_order_add_items(request):
         order = Order.objects.select_for_update().filter(id=order_id).first()
         if not order:
             return Response({'error': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
-        if order.status in ('completed', 'cancelled') or order.is_paid:
-            return Response({'error': 'Cannot add items to completed or paid orders.'}, status=status.HTTP_400_BAD_REQUEST)
+        if order.is_paid or order.status == 'cancelled':
+            return Response({'error': 'Cannot add items to paid or cancelled orders.'}, status=status.HTTP_400_BAD_REQUEST)
 
         order.current_batch += 1
         new_batch = order.current_batch
-        order.save(update_fields=['current_batch'])
+        order.status = 'new'  # Reset order status to 'new' so kitchen KDS displays new batch in active queue and chimes
+        order.save(update_fields=['current_batch', 'status'])
 
         new_items = []
         for it in items_data:

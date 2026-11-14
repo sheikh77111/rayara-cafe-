@@ -547,7 +547,7 @@
 
           if (!prev && o.status === 'new') {
             alertMessage = `🔔 NEW KOT: ${target} (${o.total_items_count} items) placed!`;
-          } else if (prev && (o.total_items_count > prev.count || o.current_batch > prev.batch)) {
+          } else if (prev && (o.total_items_count > prev.count || o.current_batch > prev.batch || (o.status === 'new' && prev.status !== 'new'))) {
             const addedQty = o.total_items_count - prev.count;
             alertMessage = `🔥 ADD-ON KOT: ${target} (+${addedQty > 0 ? addedQty : 'new'} items, Batch #${o.current_batch}) added!`;
           }
@@ -560,7 +560,7 @@
       }
 
       data.orders.forEach(o => {
-        currentMap.set(o.id, { count: o.total_items_count, batch: o.current_batch });
+        currentMap.set(o.id, { count: o.total_items_count, batch: o.current_batch, status: o.status });
       });
 
       previousOrdersMap = currentMap;
